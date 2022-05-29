@@ -14,7 +14,7 @@ The techniques will be applied in order, starting with the simplest, until suffi
 _Status: Planned_
 
 ### Differentiating sets of links to K
-_Status: In progress, Steps 1 & 2 working_
+_Status: In progress, Steps 1, 2 & 3.1 working_
 
 #### Steps
 1. Collect and count unique sets, or patterns, of links from _An_ and _Bn_

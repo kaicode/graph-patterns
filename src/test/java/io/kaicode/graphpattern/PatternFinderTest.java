@@ -4,6 +4,7 @@ import io.kaicode.graphpattern.domain.Graph;
 import io.kaicode.graphpattern.domain.Node;
 import io.kaicode.graphpattern.domain.GraphSet;
 import io.kaicode.graphpattern.domain.Pattern;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
@@ -14,17 +15,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PatternFinderTest {
 
-	@Test
-	public void test() {
+	private GraphSet graphSet;
+	private Graph kRootNode;
+	private Node kA;
+	private Node kB;
+	private Node kC;
+
+	@BeforeEach
+	public void setup() {
 		// Setup
-		GraphSet graphSet = new GraphSet();
+		graphSet = new GraphSet();
 
 		// Knowledge graph
-		Graph kRootNode = graphSet.createKnowledgeGraph();
-		Node kA = kRootNode.addChild("A");
-		Node kB = kRootNode.addChild("B");
-		Node kC = kRootNode.addChild("C");
+		kRootNode = graphSet.createKnowledgeGraph();
+		kA = kRootNode.addChild("A");
+		kB = kRootNode.addChild("B");
+		kC = kRootNode.addChild("C");
+	}
 
+	@Test
+	public void test() {
 		// Generate instance graphs for group A
 		List<Graph> groupAGraphs = graphSet.generateInstanceGraphs(100, (node) -> {
 				if (Math.random() < 0.9) node.link(kA);
@@ -41,7 +51,7 @@ class PatternFinderTest {
 
 		// Test
 		PatternFinder patternFinder = new PatternFinder(kRootNode);
-		Collection<Pattern> sortedPatterns = patternFinder.differentiateGroups(groupAGraphs, groupBGraphs);
+		List<Pattern> sortedPatterns = patternFinder.differentiateGroupB(groupAGraphs, groupBGraphs);
 		for (Pattern sortedPattern : sortedPatterns) {
 			System.out.println(sortedPattern);
 		}
@@ -55,6 +65,21 @@ class PatternFinderTest {
 		assertPatternAndApproxNumbers(iterator.next(), 0.3f, 1.0f, "A, C", "A, B, C");
 		assertPatternAndApproxNumbers(iterator.next(), 0.13f, 0.97f, "A", "A, B");
 		assertPatternAndApproxNumbers(iterator.next(), 0.13f, 0.97f, "A", "A, B");
+
+		// Test merging groups
+		Collection<Pattern> mergedPatterns = patternFinder.mergeGroups(sortedPatterns);
+		for (Pattern mergedPattern : mergedPatterns) {
+			System.out.println(mergedPattern);
+		}
+
+		// Assert number of unique patterns
+		assertEquals(5, mergedPatterns.size());
+		iterator = mergedPatterns.iterator();
+		Pattern firstMergedPattern = iterator.next();
+		// Coverage increased to 70% after merge, accuracy still 100%
+		assertPatternAndApproxNumbers(firstMergedPattern, 0.7f, 1.0f, "C");
+		// Some optional nodes identified during pattern merging
+		assertEquals("[A, B]", firstMergedPattern.getOptionalNodes().toString());
 	}
 
 	private void assertPatternAndApproxNumbers(Pattern actual, float expectedCoverageApprox, float expectedAccuracyApprox, String... expectedPatternSet) {
