@@ -25,11 +25,24 @@ public class Node {
 		return child;
 	}
 
+	public Node getOrAddChild(String id) {
+		for (Node child : getChildren()) {
+			if (child.id.equals(id)) {
+				return child;
+			}
+		}
+		return addChild(id);
+	}
+
 	public void link(Node linkedNode) {
 		if (links == null) {
 			links = new HashSet<>();
 		}
 		links.add(linkedNode);
+	}
+
+	public String getId() {
+		return id;
 	}
 
 	public Set<Node> getLinks() {

@@ -50,4 +50,8 @@ public class GraphSet {
 		}
 		return groupRootNodes;
 	}
+
+	public Graph getKnowledgeGraph() {
+		return knowledgeGraph;
+	}
 }

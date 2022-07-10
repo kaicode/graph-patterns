@@ -3,6 +3,7 @@ package io.kaicode.graphpattern;
 import io.kaicode.graphpattern.domain.Graph;
 import io.kaicode.graphpattern.domain.Node;
 import io.kaicode.graphpattern.domain.Pattern;
+import io.kaicode.graphpattern.domain.PatternSets;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -11,6 +12,7 @@ public class PatternFinder {
 
 	public static final Comparator<Pattern> PATTERN_COMPARATOR = Comparator.comparing(Pattern::getCoverageTimesAccuracy).reversed();
 	private final Graph knowledgeGraph;
+	private boolean debug = false;
 
 	public PatternFinder(Graph knowledgeGraph) {
 		this.knowledgeGraph = knowledgeGraph;
@@ -25,7 +27,8 @@ public class PatternFinder {
 		return rawPatterns;
 	}
 
-	public List<Pattern> differentiateGroupB(List<Graph> groupAGraphs, List<Graph> groupBGraphs) {
+	public PatternSets differentiateGroupB(List<Graph> groupAGraphs, List<Graph> groupBGraphs) {
+		System.out.println("Differentiating groups...");
 		Map<Integer, Pattern> groupBPatterns = collectRawPatternsWithCounts(groupBGraphs);
 		Map<Integer, Pattern> groupAPatterns = collectRawPatternsWithCounts(groupAGraphs);
 
@@ -38,20 +41,25 @@ public class PatternFinder {
 
 		List<Pattern> sortedPatterns = new ArrayList<>(groupBPatterns.values());
 		sortedPatterns.sort(PATTERN_COMPARATOR);
-		return sortedPatterns;
+		return new PatternSets(groupAPatterns.values(), sortedPatterns);
 	}
 
-	public Collection<Pattern> mergeGroups(List<Pattern> patterns) {
+	public List<Pattern> mergeGroups(List<Pattern> groupBPatterns, Collection<Pattern> groupAPatterns) {
+
+		// Make group B patterns more general by finding commonality between them and making some nodes optional.
+		// TODO: Before accepting a more general pattern it must be tested against groupA to check that the accuracy has not decreased.
+
 		System.out.println();
+		System.out.println("Merging groups");
 		Set<Pattern> mergedPatterns = new HashSet<>();
-		for (Pattern pattern : patterns.stream().sorted(Comparator.comparing(p -> p.getNodes().size() * -1)).collect(Collectors.toList())) {
+		for (Pattern pattern : groupBPatterns.stream().sorted(Comparator.comparing(p -> p.getNodes().size() * -1)).collect(Collectors.toList())) {
 			if (pattern.getAccuracy() == 1f && !mergedPatterns.contains(pattern)) {
-				for (Pattern otherPattern : patterns) {
+				for (Pattern otherPattern : groupBPatterns) {
 
 					if (!otherPattern.equals(pattern) && otherPattern.getAccuracy() == 1f && !mergedPatterns.contains(otherPattern)
 							&& pattern.getAllNodes().containsAll(otherPattern.getAllNodes())) {
 
-						System.out.println(pattern.hashCode() + " takes " + otherPattern.hashCode());
+						if (debug) System.out.println(pattern.hashCode() + " takes " + otherPattern.hashCode());
 
 						Set<Node> optional = new HashSet<>();
 						for (Node node : pattern.getNodes()) {
@@ -60,19 +68,21 @@ public class PatternFinder {
 							}
 						}
 						if (!optional.isEmpty()) {
-							System.out.println("Pattern " + pattern + " make node optional: " + optional);
+							if (debug) System.out.println("Pattern " + pattern + " make node optional: " + optional);
 							pattern.makeNodesOptional(optional);
-							System.out.println(pattern);
+							if (debug) System.out.println(pattern);
 						}
-						pattern.increaseCoverage(otherPattern.getCoverage());
-						System.out.println();
+						if (debug) System.out.println("Coverage was " + pattern.getCoverage());
+						pattern.subsume(otherPattern);
+						if (debug) System.out.println("Coverage now " + pattern.getCoverage());
+						if (debug) System.out.println();
 						mergedPatterns.add(otherPattern);
 					}
 				}
 			}
 		}
-		patterns.removeAll(mergedPatterns);
-		patterns.sort(PATTERN_COMPARATOR);
-		return patterns;
+		groupBPatterns.removeAll(mergedPatterns);
+		groupBPatterns.sort(PATTERN_COMPARATOR);
+		return groupBPatterns;
 	}
 }

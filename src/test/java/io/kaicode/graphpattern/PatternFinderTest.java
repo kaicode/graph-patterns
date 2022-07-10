@@ -1,17 +1,15 @@
 package io.kaicode.graphpattern;
 
-import io.kaicode.graphpattern.domain.Graph;
-import io.kaicode.graphpattern.domain.Node;
-import io.kaicode.graphpattern.domain.GraphSet;
-import io.kaicode.graphpattern.domain.Pattern;
+import io.kaicode.graphpattern.domain.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.Iterator;
+import java.util.List;
 
+import static java.lang.String.format;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 class PatternFinderTest {
 
@@ -34,15 +32,17 @@ class PatternFinderTest {
 	}
 
 	@Test
-	public void test() {
+	public void testCollectAllGroupBPatternsAndAttemptMerge() {
 		// Generate instance graphs for group A
 		List<Graph> groupAGraphs = graphSet.generateInstanceGraphs(100, (node) -> {
+				// Formula for graph A generation
 				if (Math.random() < 0.9) node.link(kA);
 				if (Math.random() < 0.5) node.link(kB);
 			}
 		);
 		// Generate instance graphs for group B
 		List<Graph> groupBGraphs = graphSet.generateInstanceGraphs(10_000, (node) -> {
+				// Formula for graph B generation
 				if (Math.random() < 0.9) node.link(kA);
 				if (Math.random() < 0.5) node.link(kB);
 				if (Math.random() < 0.7) node.link(kC);
@@ -51,7 +51,8 @@ class PatternFinderTest {
 
 		// Test
 		PatternFinder patternFinder = new PatternFinder(kRootNode);
-		List<Pattern> sortedPatterns = patternFinder.differentiateGroupB(groupAGraphs, groupBGraphs);
+		PatternSets patternSets = patternFinder.differentiateGroupB(groupAGraphs, groupBGraphs);
+		List<Pattern> sortedPatterns = patternSets.getGroupBPatterns();
 		for (Pattern sortedPattern : sortedPatterns) {
 			System.out.println(sortedPattern);
 		}
@@ -60,43 +61,51 @@ class PatternFinderTest {
 		assertEquals(8, sortedPatterns.size());
 
 		// Assert the coverage, accuracy and nodes of first four highest ranking patterns
-		Iterator<Pattern> iterator = sortedPatterns.iterator();
-		assertPatternAndApproxNumbers(iterator.next(), 0.3f, 1.0f, "A, C", "A, B, C");
-		assertPatternAndApproxNumbers(iterator.next(), 0.3f, 1.0f, "A, C", "A, B, C");
-		assertPatternAndApproxNumbers(iterator.next(), 0.13f, 0.97f, "A", "A, B");
-		assertPatternAndApproxNumbers(iterator.next(), 0.13f, 0.97f, "A", "A, B");
+		assertPatternAndApproxNumbers(sortedPatterns, 0.3f, 1.0f, "A, C", 0, 1);
+		assertPatternAndApproxNumbers(sortedPatterns, 0.3f, 1.0f, "A, B, C", 0, 1);
+		assertPatternAndApproxNumbers(sortedPatterns, 0.13f, 0.97f, "A", 2, 3);
+		assertPatternAndApproxNumbers(sortedPatterns, 0.13f, 0.97f, "A, B", 2, 3);
 
 		// Test merging groups
-		Collection<Pattern> mergedPatterns = patternFinder.mergeGroups(sortedPatterns);
+		List<Pattern> mergedPatterns = patternFinder.mergeGroups(sortedPatterns, patternSets.getGroupAPatterns());
 		for (Pattern mergedPattern : mergedPatterns) {
 			System.out.println(mergedPattern);
 		}
 
 		// Assert number of unique patterns
 		assertEquals(5, mergedPatterns.size());
-		iterator = mergedPatterns.iterator();
+		Iterator<Pattern> iterator = mergedPatterns.iterator();
 		Pattern firstMergedPattern = iterator.next();
 		// Coverage increased to 70% after merge, accuracy still 100%
-		assertPatternAndApproxNumbers(firstMergedPattern, 0.7f, 1.0f, "C");
+		assertPatternAndApproxNumbers(mergedPatterns, 0.7f, 1.0f, "C", 0);
 		// Some optional nodes identified during pattern merging
 		assertEquals("[A, B]", firstMergedPattern.getOptionalNodes().toString());
 	}
 
-	private void assertPatternAndApproxNumbers(Pattern actual, float expectedCoverageApprox, float expectedAccuracyApprox, String... expectedPatternSet) {
-		// Test actual pattern is within expected set of patterns
-		Set<String> expectedPatterns = Arrays.stream(expectedPatternSet).collect(Collectors.toSet());
-		String actualPattern = actual.getNodes().toString().replace("[", "").replace("]", "");
-		assertTrue(expectedPatterns.contains(actualPattern));
+	private void assertPatternAndApproxNumbers(List<Pattern> actualPatterns, float expectedCoverageApprox, float expectedAccuracyApprox, String expectedPattern,
+			int... expectedIndexOneOf) {
 
-		// Test coverage
-		float giveOrTake = 0.07f;
-		assertEquals(expectedCoverageApprox, actual.getCoverage(), giveOrTake, "Assert coverage");
-		// Test accuracy
-		assertEquals(expectedAccuracyApprox, actual.getAccuracy(), giveOrTake, "Assert accuracy");
+		boolean found = false;
+		for (int index : expectedIndexOneOf) {
+			Pattern actual = actualPatterns.get(index);
+			// Test actual pattern is within expected set of patterns
+			String actualPattern = actual.getNodes().toString().replace("[", "").replace("]", "");
+			if (actualPattern.equals(expectedPattern)) {
+				found = true;
+				// Test coverage
+				float giveOrTake = 0.07f;
+				assertEquals(expectedCoverageApprox, actual.getCoverage(), giveOrTake, "Assert coverage");
+				// Test accuracy
+				assertEquals(expectedAccuracyApprox, actual.getAccuracy(), giveOrTake, "Assert accuracy");
+			}
+		}
+		if (!found) {
+			fail(format("The pattern %s was not found at the expected index", expectedPattern));
+		}
 	}
 
 	@Test
-	public void test1() {
+	public void testGetMostLinkedNode() {
 		GraphSet graphSet = new GraphSet();
 
 		// Knowledge graph

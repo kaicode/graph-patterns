@@ -8,6 +8,7 @@ public class Pattern {
 	private final Set<Node> optionalNodes;
 	private Set<Node> allNodes;
 	private final int hash;
+	private Set<Integer> subsumed;
 	private int count;
 	private float coverage;
 	private float accuracy;
@@ -16,6 +17,7 @@ public class Pattern {
 		this.nodes = nodes;
 		this.allNodes = nodes;
 		this.optionalNodes = new HashSet<>();
+		subsumed = new HashSet<>();
 		hash = Objects.hash(nodes);// Precompute hashcode for faster comparison
 		count = 0;
 	}
@@ -39,10 +41,10 @@ public class Pattern {
 		allNodes.addAll(optionalNodes);
 	}
 
-	public void increaseCoverage(float coverage) {
-		System.out.println("Coverage was " + this.coverage);
-		this.coverage += coverage;
-		System.out.println("Coverage now " + this.coverage);
+	public void subsume(Pattern otherPattern) {
+		this.coverage += otherPattern.getCoverage();
+		this.count += otherPattern.getCount();
+		this.subsumed.add(otherPattern.hash);
 	}
 
 	public Set<Node> getNodes() {
@@ -78,15 +80,31 @@ public class Pattern {
 		return accuracy;
 	}
 
+	public Set<Integer> getSubsumed() {
+		return subsumed;
+	}
+
 	@Override
 	public String toString() {
 		return "Pattern{" +
 				"hash=" + hash +
+				", subsumed=" + subsumed +
+				", count=" + count +
 				", coverage=" + coverage +
 				", accuracy=" + accuracy +
-				", nodes=" + nodes +
-				", optionalNodes=" + optionalNodes +
+				", nodes=" + collectionToString(10, nodes) +
+				", optionalNodes=" + collectionToString(10, optionalNodes) +
 				'}';
+	}
+
+	private String collectionToString(int maxLength, Set<Node> collection) {
+		String collectionString;
+		if (collection.size() > maxLength) {
+			collectionString = new ArrayList<>(collection).subList(0, maxLength) + " +" + (collection.size() - maxLength);
+		} else {
+			collectionString = collection.toString();
+		}
+		return collectionString;
 	}
 
 	@Override

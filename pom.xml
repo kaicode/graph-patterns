@@ -32,6 +32,25 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.0.0-M6</version>
 			</plugin>
+			<plugin>
+				<groupId>com.jolira</groupId>
+				<artifactId>onejar-maven-plugin</artifactId>
+				<version>1.4.4</version>
+				<executions>
+					<execution>
+						<configuration>
+							<mainClass>io.kaicode.graphpattern.App</mainClass>
+							<attachToBuild>true</attachToBuild>
+							<filename>
+								${project.build.finalName}-run.${project.packaging}
+							</filename>
+						</configuration>
+						<goals>
+							<goal>one-jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
 </project>
