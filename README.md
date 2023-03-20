@@ -11,14 +11,14 @@ Multiple techniques will be used to determine the differentiating characteristic
 The techniques will be applied in order, starting with the simplest, until sufficient characteristics are found.
 
 ### Differentiating links to K
-_Status: Planned_
+_Status: Working_
 
 ### Differentiating sets of links to K
-_Status: In progress, Steps 1, 2 & 3.1 working_
+_Status: In progress_
 
 #### Steps
-1. Collect and count unique sets, or patterns, of links from _An_ and _Bn_
-2. For each pattern calculate coverage over group Bn and accuracy
+1. Collect and count unique sets of links from _An_ and _Bn_
+2. For each set calculate coverage over group Bn and accuracy
 3. Attempt to increase coverage of patterns by generalising cases but only where accuracy is not reduced
    1. Optional links
    2. Generalise link using parent or ancestor from _K_
@@ -28,13 +28,3 @@ _Status: Planned_
 
 ### Use attributes of link concepts to find correlation?
 _Status: Planned_
-
-## How does this relate to data analytics tool?
-- it could start by performing encounter frequency diff
-- then investigate frequency with pairs of encounters? Then triples?
-- The sets of encounters could consider order.
-- Good to build this using raw objects first before putting in Elastic?
-
-In Raw folder - input to HDAD - for each identified concept from NLP - which patient -
-- over six months ago
-- current six

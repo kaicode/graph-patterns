@@ -1,28 +1,27 @@
 package io.kaicode.graphpattern.domain;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 
 public class Node {
 
-	private String id;
-	private Set<Node> children;
+	private final String id;
+	private final Set<Node> parents;
+	private final Set<Node> children;
 	private Set<Node> links;
 
-	Node() {
-
-	}
-
-	Node(String id) {
+	public Node(String id) {
 		this.id = id;
+		parents = new HashSet<>();
+		children = new HashSet<>();
 	}
 
-	public Node addChild(String id) {
-		if (children == null) {
-			children = new HashSet<>();
-		}
-		Node child = new Node(id);
-		children.add(child);
-		return child;
+	public Node addChild(Node childNode) {
+		children.add(childNode);
+		childNode.getParents().add(this);
+		return childNode;
 	}
 
 	public Node getOrAddChild(String id) {
@@ -31,7 +30,7 @@ public class Node {
 				return child;
 			}
 		}
-		return addChild(id);
+		return addChild(new Node(id));
 	}
 
 	public void link(Node linkedNode) {
@@ -51,6 +50,10 @@ public class Node {
 
 	public Set<Node> getChildren() {
 		return children != null ? children : Collections.emptySet();
+	}
+
+	public Set<Node> getParents() {
+		return parents;
 	}
 
 	@Override

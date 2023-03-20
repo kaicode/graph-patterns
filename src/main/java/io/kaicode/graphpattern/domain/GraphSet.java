@@ -44,7 +44,7 @@ public class GraphSet {
 	public List<Graph> generateInstanceGraphs(int quantity, Consumer<Graph> graphCreator) {
 		List<Graph> groupRootNodes = new ArrayList<>();
 		for (int i = 0; i < quantity; i++) {
-			Graph instanceGraph = new Graph();
+			Graph instanceGraph = new Graph("i" + i);
 			graphCreator.accept(instanceGraph);
 			groupRootNodes.add(instanceGraph);
 		}

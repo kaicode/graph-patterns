@@ -1,11 +1,9 @@
 package io.kaicode.graphpattern;
 
-import io.kaicode.graphpattern.domain.Graph;
-import io.kaicode.graphpattern.domain.Node;
-import io.kaicode.graphpattern.domain.Pattern;
-import io.kaicode.graphpattern.domain.PatternSets;
+import io.kaicode.graphpattern.domain.*;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 public class PatternFinder {
@@ -85,4 +83,32 @@ public class PatternFinder {
 		groupBPatterns.sort(PATTERN_COMPARATOR);
 		return groupBPatterns;
 	}
+
+	public List<Pair<Float, Node>> findMostDifferentiatingNodes(List<Graph> groupAGraphs, List<Graph> groupBGraphs, int topNNodes) {
+		Map<Node, AtomicInteger> groupANodeCounts = getNodeCounts(groupAGraphs);
+		Map<Node, AtomicInteger> groupBNodeCounts = getNodeCounts(groupBGraphs);
+		AtomicInteger defaultValue = new AtomicInteger(0);
+		List<Pair<Float, Node>> scoredNodes = groupBNodeCounts.entrySet().stream()
+				.map(entry -> {
+					Node node = entry.getKey();
+					float groupBCount = entry.getValue().get();
+					float groupACount = groupANodeCounts.getOrDefault(node, defaultValue).get();
+					float v = groupBCount / (groupACount + groupBCount);
+					return new Pair<>(v, node);
+				})
+				.sorted(Comparator.comparing(Pair::getFirst, Comparator.reverseOrder()))
+				.collect(Collectors.toList());
+		return scoredNodes.subList(0, Math.min(scoredNodes.size(), topNNodes));
+	}
+
+	private Map<Node, AtomicInteger> getNodeCounts(List<Graph> graphs) {
+		Map<Node, AtomicInteger> nodeCounts = new HashMap<>();
+		for (Graph graph : graphs) {
+			for (Node link : graph.getLinks()) {
+				nodeCounts.computeIfAbsent(link, key -> new AtomicInteger()).incrementAndGet();
+			}
+		}
+		return nodeCounts;
+	}
+
 }
