@@ -1,5 +1,7 @@
 # Graph Instance Classifier
 
+## Status: _IN DEVELOPMENT_
+
 A library to solve the following graph based problem:
 
 Given a knowledge graph _K_ and two sets of instance graphs _An_ and _Bn_ that contain links to _K_, 
