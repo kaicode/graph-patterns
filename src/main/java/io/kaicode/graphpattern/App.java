@@ -15,6 +15,7 @@ public class App {
 
 	// Load knowledge graph
 	// Load instance graphs
+	// Load instance cohorts
 	// Enrich instance graphs with KG ancestors
 	// Identify top x differentiating nodes
 	// Identify any pair for each that increases the score?
@@ -30,31 +31,40 @@ public class App {
 //		args = new String[]{"data/knowledge-graph-child-parent.txt", "data/instance-data.txt", "371087003", "3"};
 
 		if (args.length != 4) {
-			System.out.println("Expecting 4 arguments: path-to-knowledge-graph path-to-instance-data groupB-indicator max-upward-level");
+			System.out.println("Expecting 4 arguments: path-to-knowledge-graph path-to-instance-data path-to-cohorts groupB-indicator max-upward-level");
 			System.exit(1);
 		}
 		String knowledgeGraphHierarchy = args[0];
 		String instanceData = args[1];
-		String groupBIndicator = args[2];
-		int upwardLevelLimit = Integer.parseInt(args[3]);
-		new App().run(knowledgeGraphHierarchy, instanceData, groupBIndicator, upwardLevelLimit);
+		String instanceCohorts = args[2];
+		String groupBIndicator = args[3];
+		int upwardLevelLimit = Integer.parseInt(args[4]);
+		new App().run(knowledgeGraphHierarchy, instanceData, instanceCohorts, groupBIndicator, upwardLevelLimit);
 	}
 
-	private void run(String knowledgeGraphHierarchy, String instanceData, String groupBIndicator, int upwardLevelLimit) {
+	private void run(String knowledgeGraphHierarchy, String instanceData, String instanceCohorts, String groupBIndicator, int upwardLevelLimit) {
 		System.out.println("< Graph Pattern Analysis >");
 		System.out.println();
 
 		GraphBuilder knowledgeGraph = loadKnowledgeGraph(knowledgeGraphHierarchy);
 
 		Map<String, Set<String>> allInstanceGraphs = loadInstanceGraphs(instanceData);
+		Map<String, Set<String>> cohortInstanceMap = loadCohorts(instanceCohorts);
+		Set<String> groupBCohort = cohortInstanceMap.get(groupBIndicator);
+		if (groupBCohort == null) {
+			throw new RuntimeException("GroupB indicator is not present in the cohorts file");
+		}
+		if (groupBCohort.isEmpty()) {
+			throw new RuntimeException("GroupB cohort is empty");
+		}
 
 		// Split instance groups
 		Map<String, Set<String>> groupAInstanceGraphs = allInstanceGraphs.entrySet().stream()
-				.filter(entry -> !entry.getValue().contains(groupBIndicator))
+				.filter(entry -> !groupBCohort.contains(entry.getKey()))
 				.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
 		Map<String, Set<String>> groupBInstanceGraphs = allInstanceGraphs.entrySet().stream()
-				.filter(entry -> entry.getValue().contains(groupBIndicator))
+				.filter(entry -> groupBCohort.contains(entry.getKey()))
 				.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
 		Set<String> nodesToEnrich = groupBInstanceGraphs.values().stream().flatMap(Set::stream).collect(Collectors.toSet());
@@ -164,6 +174,30 @@ public class App {
 
 		System.out.println();
 		System.out.println("Process Complete");
+	}
+
+	private Map<String, Set<String>> loadCohorts(String instanceCohorts) {
+		try {
+			BufferedReader reader = new BufferedReader(new FileReader(instanceCohorts));
+			String header = reader.readLine();
+			int columnCount = header.split("\t").length;
+			if (columnCount != 2) {
+				System.err.printf("Failed to read cohorts input file. Expected tab separated file with two columns. Got %s columns.", columnCount);
+				System.exit(1);
+			}
+
+			Map<String, Set<String>> cohortInstanceMap = new HashMap<>();
+			String row;
+			while ((row = reader.readLine()) != null) {
+				String[] columns = row.split("\t");
+				String cohort = columns[0];
+				String instanceId = columns[1];
+				cohortInstanceMap.computeIfAbsent(cohort, i -> new HashSet<>()).add(instanceId);
+			}
+			return cohortInstanceMap;
+		} catch (IOException e) {
+			throw new RuntimeException("Failed to read cohort file.", e);
+		}
 	}
 
 	private void findPairs(Map<String, Set<String>> groupAInstanceGraphs, Map<String, Set<String>> groupBInstanceGraphs, int groupASize, int groupBSize, List<Pair<String, Float>> mostDifferentiatingNodes, Set<String> nMostDifferentiatingNodes) {
