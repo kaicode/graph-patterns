@@ -30,8 +30,8 @@ public class App {
 
 //		args = new String[]{"data/knowledge-graph-child-parent.txt", "data/instance-data.txt", "371087003", "3"};
 
-		if (args.length != 4) {
-			System.out.println("Expecting 4 arguments: path-to-knowledge-graph path-to-instance-data path-to-cohorts groupB-indicator max-upward-level");
+		if (args.length != 5) {
+			System.out.println("Expecting 5 arguments: path-to-knowledge-graph path-to-instance-data path-to-cohorts groupB-indicator max-upward-level");
 			System.exit(1);
 		}
 		String knowledgeGraphHierarchy = args[0];
