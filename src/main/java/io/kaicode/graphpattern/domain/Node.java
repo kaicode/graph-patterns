@@ -11,13 +11,15 @@ public class Node {
 	private final Set<Node> parents;
 	private final Set<Node> children;
 	private Set<Node> links;
-	private int groupACount = 0;
-	private int groupBCount = 0;
+	private Set<String> groupAInstanceIds;
+	private Set<String> groupBInstanceIds;
 
 	public Node(String code) {
 		this.code = code;
 		parents = new HashSet<>();
 		children = new HashSet<>();
+		groupAInstanceIds = new HashSet<>();
+		groupBInstanceIds = new HashSet<>();
 	}
 
 	public Node addChild(Node childNode) {
@@ -40,6 +42,14 @@ public class Node {
 			links = new HashSet<>();
 		}
 		links.add(linkedNode);
+	}
+
+	public void addGroupAInstance(String id) {
+		groupAInstanceIds.add(id);
+	}
+
+	public void addGroupBInstance(String id) {
+		groupBInstanceIds.add(id);
 	}
 
 	public String getCode() {
@@ -70,38 +80,44 @@ public class Node {
 		return ancestors;
 	}
 
-	public void setGroupACount(int groupACount) {
-		this.groupACount = groupACount;
-	}
-
-	public void setGroupBCount(int groupBCount) {
-		this.groupBCount = groupBCount;
-	}
-
 	public float getScaledAggregatedDifference(int groupASize, int groupBSize) {
-		int conceptAndDescendantsIncidenceCountInGroupA = getAggregateGroupACount();
-		int conceptAndDescendantsIncidenceCountInGroupB = getAggregateGroupBCount();
+		int conceptAndDescendantsInstanceCountInGroupA = getAggregateGroupACount();
+		int conceptAndDescendantsInstanceCountInGroupB = getAggregateGroupBCount();
 
-		float aStrength = conceptAndDescendantsIncidenceCountInGroupA / (float) groupASize;
-		float bStrength = conceptAndDescendantsIncidenceCountInGroupB / (float) groupBSize;
+		float aStrength = conceptAndDescendantsInstanceCountInGroupA / (float) groupASize;
+		float bStrength = conceptAndDescendantsInstanceCountInGroupB / (float) groupBSize;
 		float diff = bStrength - aStrength;
 		return diff;
 	}
 
 	private int getAggregateGroupACount() {
-		int a = groupACount;
+		Set<String> instanceIds = new HashSet<>(groupAInstanceIds);
 		for (Node child : children) {
-			a += child.getAggregateGroupACount();
+			child.collectGroupAInstances(instanceIds);
 		}
-		return a;
+		return instanceIds.size();
+	}
+
+	private void collectGroupAInstances(Set<String> instanceIds) {
+		instanceIds.addAll(groupAInstanceIds);
+		for (Node child : children) {
+			child.collectGroupAInstances(instanceIds);
+		}
 	}
 
 	private int getAggregateGroupBCount() {
-		int b = groupBCount;
+		Set<String> instanceIds = new HashSet<>(groupBInstanceIds);
 		for (Node child : children) {
-			b += child.getAggregateGroupBCount();
+			child.collectGroupBInstances(instanceIds);
 		}
-		return b;
+		return instanceIds.size();
+	}
+
+	private void collectGroupBInstances(Set<String> instanceIds) {
+		instanceIds.addAll(groupBInstanceIds);
+		for (Node child : children) {
+			child.collectGroupAInstances(instanceIds);
+		}
 	}
 
 	@Override

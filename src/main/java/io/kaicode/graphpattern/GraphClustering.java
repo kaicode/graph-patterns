@@ -1,7 +1,6 @@
 package io.kaicode.graphpattern;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationConfig;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.kaicode.graphpattern.domain.GraphBuilder;
@@ -81,49 +80,53 @@ public class GraphClustering {
 				.filter(entry -> groupBCohort.contains(entry.getKey()))
 				.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-		Map<String, Integer> groupANodeCounts = getNodeCounts(groupAInstanceGraphs);
-		Map<String, Integer> groupBNodeCounts = getNodeCounts(groupBInstanceGraphs);
-
+		// Add instance ids into the graph
 		Set<String> notFoundCodes = new HashSet<>();
-		for (Map.Entry<String, Integer> nodeCount : groupANodeCounts.entrySet()) {
-			String code = nodeCount.getKey();
-			Node node = knowledgeGraph.getNode(code);
-			if (node == null) {
-				if (notFoundCodes.add(code)) {// Report only once per code
-					System.err.printf("Code %s not found in knowledge graph%n", code);
+		Set<String> allCodesUsed = new HashSet<>();
+		for (Map.Entry<String, Set<String>> instanceIdAndConcepts : groupAInstanceGraphs.entrySet()) {
+			String id = instanceIdAndConcepts.getKey();
+			Set<String> concepts = instanceIdAndConcepts.getValue();
+			for (String code : concepts) {
+				Node node = knowledgeGraph.getNode(code);
+				if (node == null) {
+					if (notFoundCodes.add(code)) {// Report only once per code
+						System.err.printf("Code %s not found in knowledge graph%n", code);
+					}
+				} else {
+					node.addGroupAInstance(id);
+					allCodesUsed.add(code);
 				}
-			} else {
-				node.setGroupACount(nodeCount.getValue());
-			}
-		}
-		for (Map.Entry<String, Integer> nodeCount : groupBNodeCounts.entrySet()) {
-			String code = nodeCount.getKey();
-			Node node = knowledgeGraph.getNode(code);
-			if (node == null) {
-				if (notFoundCodes.add(code)) {// Report only once per code
-					System.err.printf("Code %s not found in knowledge graph%n", code);
-				}
-			} else {
-				node.setGroupBCount(nodeCount.getValue());
-			}
-		}
 
-		int groupASize = groupAInstanceGraphs.size();
-		int groupBSize = groupBInstanceGraphs.size();
-		Set<String> allCodesUsed = new HashSet<>(groupANodeCounts.keySet());
-		allCodesUsed.addAll(groupANodeCounts.keySet());
-		allCodesUsed.removeAll(notFoundCodes);
-		double minDiff = 0.005;
-		double minGainToCluster = 0.02;
+			}
+		}
+		for (Map.Entry<String, Set<String>> patientAndConcepts : groupBInstanceGraphs.entrySet()) {
+			String id = patientAndConcepts.getKey();
+			Set<String> concepts = patientAndConcepts.getValue();
+			for (String code : concepts) {
+				Node node = knowledgeGraph.getNode(code);
+				if (node == null) {
+					if (notFoundCodes.add(code)) {// Report only once per code
+						System.err.printf("Code %s not found in knowledge graph%n", code);
+					}
+				} else {
+					node.addGroupBInstance(id);
+					allCodesUsed.add(code);
+				}
+			}
+		}
 
 		// 414916001 |Obesity (disorder)|
-		Set<String> obConcepts = null;
+		Set<String> obConcepts;
 		try {
 			obConcepts = getConcepts("<!73211009");
 		} catch (JsonProcessingException e) {
 			throw new RuntimeException(e);
 		}
 
+		int groupASize = groupAInstanceGraphs.size();
+		int groupBSize = groupBInstanceGraphs.size();
+		double minDiff = 0.005;
+		double minGainToCluster = 0.1;
 		List<Pair<String, Float>> nodesRankedByDifference = getNodesRankedByDifferenceAndGain(knowledgeGraph, allCodesUsed, groupASize, groupBSize, upwardLevelLimit, minDiff,
 				minGainToCluster, obConcepts);
 
@@ -330,7 +333,7 @@ public class GraphClustering {
 	}
 
 	private float calculateGain(float first, float second) {
-		return (second - first) / ((first + second) / 2f);
+		return (second / first) - 1;
 	}
 
 	private Map<String, Float> collectAncestorDiffs(Node node, int groupASize, int groupBSize, int upwardLevelLimit, Map<String, Float> diffs, Map<String, Float> nodeDiffCache) {
