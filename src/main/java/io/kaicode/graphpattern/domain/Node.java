@@ -7,13 +7,15 @@ import java.util.Set;
 
 public class Node {
 
-	private final String id;
+	private final String code;
 	private final Set<Node> parents;
 	private final Set<Node> children;
 	private Set<Node> links;
+	private int groupACount = 0;
+	private int groupBCount = 0;
 
-	public Node(String id) {
-		this.id = id;
+	public Node(String code) {
+		this.code = code;
 		parents = new HashSet<>();
 		children = new HashSet<>();
 	}
@@ -26,7 +28,7 @@ public class Node {
 
 	public Node getOrAddChild(String id) {
 		for (Node child : getChildren()) {
-			if (child.id.equals(id)) {
+			if (child.code.equals(id)) {
 				return child;
 			}
 		}
@@ -40,8 +42,8 @@ public class Node {
 		links.add(linkedNode);
 	}
 
-	public String getId() {
-		return id;
+	public String getCode() {
+		return code;
 	}
 
 	public Set<Node> getLinks() {
@@ -56,9 +58,55 @@ public class Node {
 		return parents;
 	}
 
+	public Set<Node> getAncestors() {
+		return getAncestors(new HashSet<>());
+	}
+
+	private Set<Node> getAncestors(Set<Node> ancestors) {
+		ancestors.addAll(parents);
+		for (Node parent : parents) {
+			parent.getAncestors(ancestors);
+		}
+		return ancestors;
+	}
+
+	public void setGroupACount(int groupACount) {
+		this.groupACount = groupACount;
+	}
+
+	public void setGroupBCount(int groupBCount) {
+		this.groupBCount = groupBCount;
+	}
+
+	public float getScaledAggregatedDifference(int groupASize, int groupBSize) {
+		int conceptAndDescendantsIncidenceCountInGroupA = getAggregateGroupACount();
+		int conceptAndDescendantsIncidenceCountInGroupB = getAggregateGroupBCount();
+
+		float aStrength = conceptAndDescendantsIncidenceCountInGroupA / (float) groupASize;
+		float bStrength = conceptAndDescendantsIncidenceCountInGroupB / (float) groupBSize;
+		float diff = bStrength - aStrength;
+		return diff;
+	}
+
+	private int getAggregateGroupACount() {
+		int a = groupACount;
+		for (Node child : children) {
+			a += child.getAggregateGroupACount();
+		}
+		return a;
+	}
+
+	private int getAggregateGroupBCount() {
+		int b = groupBCount;
+		for (Node child : children) {
+			b += child.getAggregateGroupBCount();
+		}
+		return b;
+	}
+
 	@Override
 	public String toString() {
-		return id;
+		return code;
 	}
 
 	@Override
@@ -66,11 +114,11 @@ public class Node {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 		Node node = (Node) o;
-		return id.equals(node.id);
+		return code.equals(node.code);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(id);
+		return Objects.hash(code);
 	}
 }

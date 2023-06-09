@@ -11,7 +11,7 @@ public class GraphBuilder {
 
 	public void addChildParentLink(String child, String parent) {
 		Node parentNode = allNodes.computeIfAbsent(parent, id -> new Node(parent));
-		Node childNode = allNodes.computeIfAbsent(child, id -> new Node(parent));
+		Node childNode = allNodes.computeIfAbsent(child, id -> new Node(child));
 		parentNode.addChild(childNode);
 	}
 
@@ -32,7 +32,7 @@ public class GraphBuilder {
 		if (upwardLevelLimit > 0) {
 			Set<Node> parents = node.getParents();
 			for (Node parent : parents) {
-				ancestors.add(parent.getId());
+				ancestors.add(parent.getCode());
 				collectAncestors(parent, ancestors, upwardLevelLimit - 1);
 			}
 		}

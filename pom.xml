@@ -18,6 +18,11 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+			<version>2.6.15</version>
+		</dependency>
+		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
 			<version>5.8.2</version>
@@ -39,7 +44,7 @@
 				<executions>
 					<execution>
 						<configuration>
-							<mainClass>io.kaicode.graphpattern.App</mainClass>
+							<mainClass>io.kaicode.graphpattern.GraphClustering</mainClass>
 							<attachToBuild>true</attachToBuild>
 							<filename>
 								${project.build.finalName}-run.${project.packaging}

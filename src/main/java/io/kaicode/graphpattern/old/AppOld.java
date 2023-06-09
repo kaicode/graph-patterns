@@ -76,7 +76,7 @@ public class AppOld {
 						if (ignoreList.contains(knowledgeNodeId)) {
 							continue;
 						}
-						if (instanceGraph == null || !instance.equals(instanceGraph.getId())) {
+						if (instanceGraph == null || !instance.equals(instanceGraph.getCode())) {
 							// New instance
 							if (instanceGraph != null) {
 								// Add previous instance to a group
