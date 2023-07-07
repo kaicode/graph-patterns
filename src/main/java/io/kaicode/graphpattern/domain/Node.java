@@ -13,6 +13,8 @@ public class Node {
 	private Set<Node> links;
 	private Set<String> groupAInstanceIds;
 	private Set<String> groupBInstanceIds;
+	private float groupDifferenceWithSubtypes;
+	private float gainBetweenNodes;
 
 	public Node(String code) {
 		this.code = code;
@@ -80,13 +82,18 @@ public class Node {
 		return ancestors;
 	}
 
-	public float getScaledAggregatedDifference(int groupASize, int groupBSize) {
+	public float getGroupDifferenceWithSubtypes(int groupASize, int groupBSize) {
+
+
+		// Count unique patients for this concept and all descendants, in each group
 		int conceptAndDescendantsInstanceCountInGroupA = getAggregateGroupACount();
 		int conceptAndDescendantsInstanceCountInGroupB = getAggregateGroupBCount();
 
 		float aStrength = conceptAndDescendantsInstanceCountInGroupA / (float) groupASize;
 		float bStrength = conceptAndDescendantsInstanceCountInGroupB / (float) groupBSize;
 		float diff = bStrength - aStrength;
+		this.groupDifferenceWithSubtypes = diff;
+
 		return diff;
 	}
 
@@ -116,13 +123,21 @@ public class Node {
 	private void collectGroupBInstances(Set<String> instanceIds) {
 		instanceIds.addAll(groupBInstanceIds);
 		for (Node child : children) {
-			child.collectGroupAInstances(instanceIds);
+			child.collectGroupBInstances(instanceIds);
 		}
+	}
+
+	public void setGainBetweenNodes(float gainBetweenNodes) {
+		this.gainBetweenNodes = gainBetweenNodes;
+	}
+
+	public float getGainBetweenNodes() {
+		return gainBetweenNodes;
 	}
 
 	@Override
 	public String toString() {
-		return code;
+		return code + " diff:" + groupDifferenceWithSubtypes;
 	}
 
 	@Override

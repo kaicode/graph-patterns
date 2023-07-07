@@ -289,30 +289,39 @@ public class GraphClustering {
 			System.out.println("Checking " + codeUsed);
 
 			Node node = knowledgeGraph.getNode(codeUsed);
-			float usedNodeDifference = node.getScaledAggregatedDifference(groupASize, groupBSize);
+			float groupDifferenceWithSubtypes = node.getGroupDifferenceWithSubtypes(groupASize, groupBSize);
 
-			if (obConcepts.contains(codeUsed) && usedNodeDifference > 0.03) {
+			if (obConcepts.contains(codeUsed) && groupDifferenceWithSubtypes > 0.03) {
 				System.out.println("DEBUG!");
 			}
 
-			Map<String, Float> ancestorDiffs = collectAncestorDiffs(node, groupASize, groupBSize, upwardLevelLimit, new HashMap<>(), nodeDiffCache);
-			String best = node.getCode();
-			float bestDiff = usedNodeDifference;
-			for (Map.Entry<String, Float> ancestorEntry : ancestorDiffs.entrySet()) {
-				String ancestorCode = ancestorEntry.getKey();
-				float ancestorDiff = ancestorEntry.getValue();
-				if (ancestorDiff < minDiff) {
+			AtomicInteger ancestorDistance = new AtomicInteger(0);
+			Map<ConceptIdDistanceKey, Float> ancestorGroupDifferenceWithSubtypesMap =
+					getAncestorGroupDifferenceWithSubtypes(node, groupASize, groupBSize, upwardLevelLimit, new TreeMap<>(), nodeDiffCache, ancestorDistance);
+
+			String clusterConceptCandidate = node.getCode();
+			float bestDiff = groupDifferenceWithSubtypes;
+			for (Map.Entry<ConceptIdDistanceKey, Float> ancestorMapEntry : ancestorGroupDifferenceWithSubtypesMap.entrySet()) {
+				String ancestorCode = ancestorMapEntry.getKey().getCode();
+				float ancestorGroupDifferenceWithSubtypes = ancestorMapEntry.getValue();
+				if (ancestorGroupDifferenceWithSubtypes < minDiff) {
 					continue;
 				}
-				float gain = calculateGain(usedNodeDifference, ancestorDiff);
-				if (ancestorDiff > bestDiff && gain > minGainToCluster) {
-					best = ancestorCode;
-					bestDiff = ancestorDiff;
+				// Calculate gain
+				float gainBetweenNodes = calculateGainBetweenNodes(groupDifferenceWithSubtypes, ancestorGroupDifferenceWithSubtypes);
+				node.setGainBetweenNodes(gainBetweenNodes);
+				if (clusterConceptCandidate.equals("414915002")) { // Obese
+					System.out.println("debug");
+				}
+
+				if (ancestorGroupDifferenceWithSubtypes > bestDiff && gainBetweenNodes > minGainToCluster) {
+					clusterConceptCandidate = ancestorCode;
+					bestDiff = ancestorGroupDifferenceWithSubtypes;
 				}
 			}
 			if (bestDiff > minDiff) {
-				chosenDiffStrengths.put(best, bestDiff);
-				System.out.println("Chose " + best + " with " + bestDiff);
+				chosenDiffStrengths.put(clusterConceptCandidate, bestDiff);
+				System.out.println("Chose " + clusterConceptCandidate + " with " + bestDiff);
 			} else {
 				System.out.println("Chose none");
 			}
@@ -332,20 +341,42 @@ public class GraphClustering {
 				.collect(Collectors.toList());
 	}
 
-	private float calculateGain(float first, float second) {
-		return (second / first) - 1;
+	private float calculateGainBetweenNodes(float nodeDiff, float ancestorDiff) {
+		return (ancestorDiff / nodeDiff) - 1;
 	}
 
-	private Map<String, Float> collectAncestorDiffs(Node node, int groupASize, int groupBSize, int upwardLevelLimit, Map<String, Float> diffs, Map<String, Float> nodeDiffCache) {
+	private static class ConceptIdDistanceKey implements Comparable<ConceptIdDistanceKey> {
+		private final String code;
+		private final Integer distance;
+
+		public ConceptIdDistanceKey(String code, Integer distance) {
+			this.code = code;
+			this.distance = distance;
+		}
+
+		public String getCode() {
+			return code;
+		}
+
+		@Override
+		public int compareTo(ConceptIdDistanceKey other) {
+			return distance.compareTo(other.distance);
+		}
+	}
+
+	private Map<ConceptIdDistanceKey, Float> getAncestorGroupDifferenceWithSubtypes(Node node, int groupASize, int groupBSize, int upwardLevelLimit,
+			Map<ConceptIdDistanceKey, Float> diffs, Map<String, Float> nodeDiffCache, AtomicInteger ancestorDistance) {
+
 		if (upwardLevelLimit == 0) {
 			return diffs;
 		}
 
 		for (Node parent : node.getParents()) {
+			ancestorDistance.incrementAndGet();
 			String parentCode = parent.getCode();
-			float parentDiff = nodeDiffCache.computeIfAbsent(parentCode, c -> parent.getScaledAggregatedDifference(groupASize, groupBSize));
-			diffs.put(parentCode, parentDiff);
-			collectAncestorDiffs(parent, groupASize, groupBSize, upwardLevelLimit -1, diffs, nodeDiffCache);
+			float parentDiff = nodeDiffCache.computeIfAbsent(parentCode, c -> parent.getGroupDifferenceWithSubtypes(groupASize, groupBSize));
+			diffs.put(new ConceptIdDistanceKey(parentCode, ancestorDistance.get()), parentDiff);
+			getAncestorGroupDifferenceWithSubtypes(parent, groupASize, groupBSize, upwardLevelLimit -1, diffs, nodeDiffCache, ancestorDistance);
 		}
 
 		return diffs;
@@ -356,12 +387,12 @@ public class GraphClustering {
 		for (String codeUsed : allCodesUsed) {
 			if (!nodeDiffStrengths.containsKey(codeUsed)) {
 				Node node = knowledgeGraph.getNode(codeUsed);
-				float difference = node.getScaledAggregatedDifference(groupASize, groupBSize);
+				float difference = node.getGroupDifferenceWithSubtypes(groupASize, groupBSize);
 				nodeDiffStrengths.put(codeUsed, difference);
 				for (Node ancestor : node.getAncestors()) {
 					String ancestorCode = ancestor.getCode();
 					if (!nodeDiffStrengths.containsKey(ancestorCode)) {
-						float ancestorDifference = ancestor.getScaledAggregatedDifference(groupASize, groupBSize);
+						float ancestorDifference = ancestor.getGroupDifferenceWithSubtypes(groupASize, groupBSize);
 						nodeDiffStrengths.put(ancestorCode, ancestorDifference);
 					}
 				}
