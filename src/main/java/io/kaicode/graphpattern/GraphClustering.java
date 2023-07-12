@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 import static java.lang.String.format;
 
 public class GraphClustering {
+	public static final Comparator<Node> MAX_DIFF_MAX_DEPTH_COMPARATOR = Comparator.comparing(Node::getGroupDifferenceWithSubtypes).thenComparing(Node::getDepth).reversed();
 
 	// Load knowledge graph
 	// Load instance graphs
@@ -139,8 +140,9 @@ public class GraphClustering {
 					clustersWriter.write("\t");
 					clustersWriter.write(label);
 					clustersWriter.write("\t");
-					Set<String> codeAndDescendantCodes = node.getCodeAndDescendantCodes(new HashSet<>());
-					clustersWriter.write(codeAndDescendantCodes.stream().filter(allCodesUsed::contains).collect(Collectors.joining(",")));
+					List<Node> descendants = new ArrayList<>(node.getDescendants());
+					descendants.sort(MAX_DIFF_MAX_DEPTH_COMPARATOR);
+					clustersWriter.write(descendants.stream().map(Node::getCode).collect(Collectors.joining(",")));
 					clustersWriter.newLine();
 					System.out.printf("Node %s diff strength %s %s%n", code, difference, label != null ? label : "");
 				}
@@ -212,8 +214,6 @@ public class GraphClustering {
 
 	private List<Node> getNodesRankedByDifferenceAndGain(GraphBuilder knowledgeGraph, Set<String> allCodesUsed, int groupASize, int groupBSize, int maxClusters, float minDiff) {
 
-		Comparator<Node> maxDiffMaxDepthComparator = Comparator.comparing(Node::getGroupDifferenceWithSubtypes).thenComparing(Node::getDepth).reversed();
-
 		Node rootNode = knowledgeGraph.getRootNode();
 		rootNode.recordDepth(0);
 
@@ -222,7 +222,7 @@ public class GraphClustering {
 		List<Node> bestNodes = new ArrayList<>();
 		while (bestNodes.size() < maxClusters && !candidateNodes.isEmpty()) {
 			List<Node> sortedNodes = new ArrayList<>(candidateNodes);
-			sortedNodes.sort(maxDiffMaxDepthComparator);
+			sortedNodes.sort(MAX_DIFF_MAX_DEPTH_COMPARATOR);
 			Node candidateNode = sortedNodes.get(0);
 			if (candidateNode.getGroupDifferenceWithSubtypes() < minDiff) {
 				break;

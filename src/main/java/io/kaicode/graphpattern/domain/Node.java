@@ -163,6 +163,19 @@ public class Node {
 		return depth;
 	}
 
+	public Set<Node> getDescendants() {
+		Set<Node> nodes = new HashSet<>();
+		getDescendants(nodes);
+		return nodes;
+	}
+
+	private void getDescendants(Set<Node> nodes) {
+		for (Node child : children) {
+			nodes.add(child);
+			child.getDescendants();
+		}
+	}
+
 	@Override
 	public String toString() {
 		return code + " diff:" + groupDifferenceWithSubtypesBackup;
