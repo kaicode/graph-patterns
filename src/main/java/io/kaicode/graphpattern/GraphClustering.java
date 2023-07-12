@@ -11,7 +11,16 @@ import java.util.stream.Collectors;
 import static java.lang.String.format;
 
 public class GraphClustering {
-	public static final Comparator<Node> MAX_DIFF_MAX_DEPTH_COMPARATOR = Comparator.comparing(Node::getGroupDifferenceWithSubtypes).thenComparing(Node::getDepth).reversed();
+
+	public static final Comparator<Node> MAX_DIFF_MAX_DEPTH_COMPARATOR = Comparator
+			.comparing(Node::getGroupDifferenceWithSubtypes)
+			.thenComparing(Node::getDepth)
+			.reversed();
+
+	public static final Comparator<Node> MAX_DIFF_MAX_DEPTH_COMPARATOR_USING_DIFF_BACKUP = Comparator
+			.comparing(Node::getGroupDifferenceWithSubtypesBackup)
+			.thenComparing(Node::getDepth)
+			.reversed();
 
 	// Load knowledge graph
 	// Load instance graphs
@@ -127,9 +136,10 @@ public class GraphClustering {
 
 			System.out.println();
 			System.out.printf("Top %s differentiating nodes:%n", maxClusters);
-			clustersWriter.write("clusterCode\tdiffStrength\tdisplay\tincludedCodes");
+			clustersWriter.write("clusterCode\tdisplay\tdiffStrength\tinstanceCount\tincludedCodes");
 			clustersWriter.newLine();
-			clustersWithLabelsWriter.write("clusterCode\tdiffStrength\tdisplay\tincludedCode\tincludedCodeDiffStrength\tincludedCodeDisplay");
+			clustersWithLabelsWriter.write("clusterCode\tdisplay\tdiffStrength\tinstanceCount\tincludedCode\tincludedCodeDisplay\tincludedCodeDiffStrength" +
+					"\tincludedCodeInstanceCount");
 			clustersWithLabelsWriter.newLine();
 			for (int i = 0; chosenNodes.size() < Math.min(maxClusters, nodesRankedByDifference.size()); i++) {
 				Node node = nodesRankedByDifference.get(i);
@@ -141,33 +151,36 @@ public class GraphClustering {
 					String label = knowledgeGraphLabels.get(code);
 					clustersWriter.write(code);
 					clustersWriter.write("\t");
+					clustersWriter.write(label);
+					clustersWriter.write("\t");
 					clustersWriter.write(difference.toString());
 					clustersWriter.write("\t");
-					clustersWriter.write(label);
+					clustersWriter.write(Integer.toString(node.getInstanceCount()));
 					clustersWriter.write("\t");
 					Set<Node> descendantAndSelfSet = node.getDescendantsAndSelf();
 					List<Node> descendantsFilteredSorted = descendantAndSelfSet.stream()
 							.filter(n -> allCodesUsed.contains(n.getCode()))
-							.sorted(MAX_DIFF_MAX_DEPTH_COMPARATOR)
+							.sorted(MAX_DIFF_MAX_DEPTH_COMPARATOR_USING_DIFF_BACKUP)
 							.collect(Collectors.toList());
 					clustersWriter.write(descendantsFilteredSorted.stream().map(Node::getCode).collect(Collectors.joining(",")));
 					clustersWriter.newLine();
 
 					for (Node includedCode : descendantsFilteredSorted) {
-						// clusterCode	diffStrength	display	includedCode	includedCodeDiffStrength	includedCodeInstanceCount	includedCodeDisplay
 						clustersWithLabelsWriter.write(code);
-						clustersWithLabelsWriter.write("\t");
-						clustersWithLabelsWriter.write(difference.toString());
 						clustersWithLabelsWriter.write("\t");
 						clustersWithLabelsWriter.write(label);
 						clustersWithLabelsWriter.write("\t");
+						clustersWithLabelsWriter.write(difference.toString());
+						clustersWithLabelsWriter.write("\t");
+						clustersWithLabelsWriter.write(Integer.toString(node.getInstanceCount()));
+						clustersWithLabelsWriter.write("\t");
 						clustersWithLabelsWriter.write(includedCode.getCode());
+						clustersWithLabelsWriter.write("\t");
+						clustersWithLabelsWriter.write(knowledgeGraphLabels.get(includedCode.getCode()));
 						clustersWithLabelsWriter.write("\t");
 						clustersWithLabelsWriter.write(includedCode.getGroupDifferenceWithSubtypesBackup() + "");
 						clustersWithLabelsWriter.write("\t");
 						clustersWithLabelsWriter.write(Integer.toString(includedCode.getInstanceCount()));
-						clustersWithLabelsWriter.write("\t");
-						clustersWithLabelsWriter.write(knowledgeGraphLabels.get(includedCode.getCode()));
 						clustersWithLabelsWriter.newLine();
 					}
 					System.out.printf("Node %s diff strength %s %s%n", code, difference, label != null ? label : "");

@@ -25,6 +25,14 @@ public class Node {
 		groupBInstanceIds = new HashSet<>();
 	}
 
+	public static Node newTestNode(String code, float groupDifference, int depth) {
+		Node node = new Node(code);
+		node.groupDifferenceWithSubtypes = groupDifference;
+		node.groupDifferenceWithSubtypesBackup = groupDifference;
+		node.depth = depth;
+		return node;
+	}
+
 	public Node addChild(Node childNode) {
 		children.add(childNode);
 		childNode.getParents().add(this);
@@ -183,7 +191,7 @@ public class Node {
 
 	@Override
 	public String toString() {
-		return code + " diff:" + groupDifferenceWithSubtypesBackup;
+		return code + " diff:" + groupDifferenceWithSubtypesBackup + " depth:" + depth;
 	}
 
 	@Override
