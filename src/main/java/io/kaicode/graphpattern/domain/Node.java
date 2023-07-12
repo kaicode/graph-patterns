@@ -11,10 +11,11 @@ public class Node {
 	private final Set<Node> parents;
 	private final Set<Node> children;
 	private Set<Node> links;
-	private Set<String> groupAInstanceIds;
-	private Set<String> groupBInstanceIds;
-	private float groupDifferenceWithSubtypes;
-	private float gainBetweenNodes;
+	private final Set<String> groupAInstanceIds;
+	private final Set<String> groupBInstanceIds;
+	private float groupDifferenceWithSubtypes = -2;
+	private float groupDifferenceWithSubtypesBackup = 0;
+	private int depth;
 
 	public Node(String code) {
 		this.code = code;
@@ -63,7 +64,7 @@ public class Node {
 	}
 
 	public Set<Node> getChildren() {
-		return children != null ? children : Collections.emptySet();
+		return children;
 	}
 
 	public Set<Node> getParents() {
@@ -82,19 +83,37 @@ public class Node {
 		return ancestors;
 	}
 
-	public float getGroupDifferenceWithSubtypes(int groupASize, int groupBSize) {
+	public Set<String> getCodeAndDescendantCodes(Set<String> codes) {
+		codes.add(code);
+		for (Node child : children) {
+			child.getCodeAndDescendantCodes(codes);
+		}
+		return codes;
+	}
 
+	public void calculateGroupDifferenceWithSubtypes(int groupASize, int groupBSize, boolean forceZero) {
+		if (forceZero) {
+			groupDifferenceWithSubtypes = 0;
+		} else if (groupDifferenceWithSubtypes == -2) {
+			// Count unique patients for this concept and all descendants, in each group
+			int conceptAndDescendantsInstanceCountInGroupA = getAggregateGroupACount();
+			int conceptAndDescendantsInstanceCountInGroupB = getAggregateGroupBCount();
 
-		// Count unique patients for this concept and all descendants, in each group
-		int conceptAndDescendantsInstanceCountInGroupA = getAggregateGroupACount();
-		int conceptAndDescendantsInstanceCountInGroupB = getAggregateGroupBCount();
+			float aStrength = conceptAndDescendantsInstanceCountInGroupA / (float) groupASize;
+			float bStrength = conceptAndDescendantsInstanceCountInGroupB / (float) groupBSize;
+			this.groupDifferenceWithSubtypes = bStrength - aStrength;
+			if (this.groupDifferenceWithSubtypesBackup == 0) {
+				this.groupDifferenceWithSubtypesBackup = groupDifferenceWithSubtypes;
+			}
+		}
+	}
 
-		float aStrength = conceptAndDescendantsInstanceCountInGroupA / (float) groupASize;
-		float bStrength = conceptAndDescendantsInstanceCountInGroupB / (float) groupBSize;
-		float diff = bStrength - aStrength;
-		this.groupDifferenceWithSubtypes = diff;
+	public Float getGroupDifferenceWithSubtypes() {
+		return groupDifferenceWithSubtypes;
+	}
 
-		return diff;
+	public float getGroupDifferenceWithSubtypesBackup() {
+		return groupDifferenceWithSubtypesBackup;
 	}
 
 	private int getAggregateGroupACount() {
@@ -127,17 +146,26 @@ public class Node {
 		}
 	}
 
-	public void setGainBetweenNodes(float gainBetweenNodes) {
-		this.gainBetweenNodes = gainBetweenNodes;
+	/**
+	 * Set the depth at which the concept first appears within the hierarchy
+	 * @param depth depth so far
+	 */
+	public void recordDepth(int depth) {
+		if (this.depth < depth) {
+			this.depth = depth;
+		}
+		for (Node child : getChildren()) {
+			child.recordDepth(depth + 1);
+		}
 	}
 
-	public float getGainBetweenNodes() {
-		return gainBetweenNodes;
+	public Integer getDepth() {
+		return depth;
 	}
 
 	@Override
 	public String toString() {
-		return code + " diff:" + groupDifferenceWithSubtypes;
+		return code + " diff:" + groupDifferenceWithSubtypesBackup;
 	}
 
 	@Override

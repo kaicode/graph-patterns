@@ -33,6 +33,10 @@ public class GraphBuilder {
 		return ancestors;
 	}
 
+	public Node getRootNode() {
+		return rootNode;
+	}
+
 	private void collectAncestors(Node node, Set<String> ancestors, int upwardLevelLimit) {
 		if (upwardLevelLimit > 0) {
 			Set<Node> parents = node.getParents();

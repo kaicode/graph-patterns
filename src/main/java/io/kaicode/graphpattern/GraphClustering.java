@@ -1,18 +1,11 @@
 package io.kaicode.graphpattern;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.kaicode.graphpattern.domain.GraphBuilder;
 import io.kaicode.graphpattern.domain.Node;
-import io.kaicode.graphpattern.domain.Pair;
 import io.kaicode.graphpattern.util.FileUtils;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -33,13 +26,9 @@ public class GraphClustering {
 		// output - list of highest, strength and type
 		// output - map of highest code to final code (may be original or enriched)
 
-//		args = new String[]{"data/knowledge-graph-child-parent.txt", "data/instance-data.txt", "371087003", 3, 20};
-
-		// TODO: Ban reporting root concept and top 19
-
 		if (args.length != 7) {
 			System.out.println("Expecting 7 arguments: path-to-knowledge-graph path-to-knowledge-graph-labels path-to-instance-data path-to-cohorts groupB-indicator " +
-					"max-upward-level max-clusters");
+					"min-difference max-clusters");
 			System.exit(1);
 		}
 		String knowledgeGraphHierarchy = args[0];
@@ -47,13 +36,14 @@ public class GraphClustering {
 		String instanceData = args[2];
 		String instanceCohorts = args[3];
 		String groupBIndicator = args[4];
-		int upwardLevelLimit = Integer.parseInt(args[5]);
+		float minDiff = Float.parseFloat(args[5]);
 		int maxClusters = Integer.parseInt(args[6]);
-		new GraphClustering().run(knowledgeGraphHierarchy, knowledgeGraphLabels, instanceData, instanceCohorts, groupBIndicator, upwardLevelLimit, maxClusters);
+		new GraphClustering().run(knowledgeGraphHierarchy, knowledgeGraphLabels, instanceData, instanceCohorts, groupBIndicator, minDiff, maxClusters);
 	}
 
-	private void run(String knowledgeGraphHierarchy, String knowledgeGraphLabelsPath, String instanceData, String instanceCohorts, String groupBIndicator, int upwardLevelLimit,
-			int maxClusters) {
+	private void run(String knowledgeGraphHierarchy, String knowledgeGraphLabelsPath, String instanceData, String instanceCohorts, String groupBIndicator,
+			float minDiff, int maxClusters) {
+
 		System.out.println("< Graph Pattern Analysis >");
 		System.out.println();
 
@@ -115,20 +105,9 @@ public class GraphClustering {
 			}
 		}
 
-		// 414916001 |Obesity (disorder)|
-		Set<String> obConcepts;
-		try {
-			obConcepts = getConcepts("<!73211009");
-		} catch (JsonProcessingException e) {
-			throw new RuntimeException(e);
-		}
-
 		int groupASize = groupAInstanceGraphs.size();
 		int groupBSize = groupBInstanceGraphs.size();
-		double minDiff = 0.005;
-		double minGainToCluster = 0.1;
-		List<Pair<String, Float>> nodesRankedByDifference = getNodesRankedByDifferenceAndGain(knowledgeGraph, allCodesUsed, groupASize, groupBSize, upwardLevelLimit, minDiff,
-				minGainToCluster, obConcepts);
+		List<Node> nodesRankedByDifference = getNodesRankedByDifferenceAndGain(knowledgeGraph, allCodesUsed, groupASize, groupBSize, maxClusters, minDiff);
 
 		Set<String> chosenNodes = new HashSet<>();
 		Map<String, Float> chosenNodeStrengths = new HashMap<>();
@@ -137,21 +116,33 @@ public class GraphClustering {
 		if (!outputDir.isDirectory() && !outputDir.mkdirs()) {
 			System.err.println("Failed to create output directory");
 		}
+		String clusterFilename = "output/clusters.txt";
 		String codeMapFilename = "output/instance-code-cluster-map.txt";
-		try (BufferedWriter clusterMap = new BufferedWriter(new FileWriter(codeMapFilename))) {
-			clusterMap.write("sourceCode\ttargetCode");
-			clusterMap.newLine();
+		try (BufferedWriter clustersWriter = new BufferedWriter(new FileWriter(clusterFilename));
+			 BufferedWriter clusterMapWriter = new BufferedWriter(new FileWriter(codeMapFilename))) {
+
 			System.out.println();
 			System.out.printf("Top %s differentiating nodes:%n", maxClusters);
+			clustersWriter.write("code\tdiffStrength\tdisplay\tclusterCodes");
+			clustersWriter.newLine();
 			for (int i = 0; chosenNodes.size() < Math.min(maxClusters, nodesRankedByDifference.size()); i++) {
-				Pair<String, Float> codeDiffStrength = nodesRankedByDifference.get(i);
-				String code = codeDiffStrength.getFirst();
+				Node node = nodesRankedByDifference.get(i);
+				String code = node.getCode();
 				if (!code.equals(groupBIndicator)) {
 					chosenNodes.add(code);
-					Float strength = codeDiffStrength.getSecond();
-					chosenNodeStrengths.put(code, strength);
+					Float difference = node.getGroupDifferenceWithSubtypesBackup();
+					chosenNodeStrengths.put(code, difference);
 					String label = knowledgeGraphLabels.get(code);
-					System.out.printf("Node %s diff strength %s %s%n", code, strength, label != null ? label : "");
+					clustersWriter.write(code);
+					clustersWriter.write("\t");
+					clustersWriter.write(difference.toString());
+					clustersWriter.write("\t");
+					clustersWriter.write(label);
+					clustersWriter.write("\t");
+					Set<String> codeAndDescendantCodes = node.getCodeAndDescendantCodes(new HashSet<>());
+					clustersWriter.write(codeAndDescendantCodes.stream().filter(allCodesUsed::contains).collect(Collectors.joining(",")));
+					clustersWriter.newLine();
+					System.out.printf("Node %s diff strength %s %s%n", code, difference, label != null ? label : "");
 				}
 			}
 			System.out.println();
@@ -159,6 +150,8 @@ public class GraphClustering {
 
 			// Create cluster-map. Can be used for feature reduction. Codes are mapped to cluster codes.
 
+			clusterMapWriter.write("sourceCode\ttargetCode");
+			clusterMapWriter.newLine();
 			Set<String> mapped = new HashSet<>();
 			for (String codeUsed : allCodesUsed) {
 				Node node = knowledgeGraph.getNode(codeUsed);
@@ -168,10 +161,10 @@ public class GraphClustering {
 					if (chosenNodes.contains(candidate.getCode())) {
 						String destinationCode = candidate.getCode();
 						if (mapped.add(codeUsed + ">" + destinationCode)) {
-							clusterMap.write(codeUsed);
-							clusterMap.write("\t");
-							clusterMap.write(destinationCode);
-							clusterMap.newLine();
+							clusterMapWriter.write(codeUsed);
+							clusterMapWriter.write("\t");
+							clusterMapWriter.write(destinationCode);
+							clusterMapWriter.newLine();
 
 							Float diffStrength = chosenNodeStrengths.get(destinationCode);
 							String enrichmentMessage = !codeUsed.equals(destinationCode) ? format("clustered at ancestor level (%s)", destinationCode) : "";
@@ -183,49 +176,14 @@ public class GraphClustering {
 			}
 
 			System.out.println();
+			System.out.printf("Clusters written to %s%n", clusterFilename);
 			System.out.printf("Map written to %s%n", codeMapFilename);
 		} catch (IOException e) {
 			throw new RuntimeException("Failed to write cluster map output file.", e);
 		}
 
-//		findPairs(groupAInstanceGraphs, groupBInstanceGraphs, groupASize, groupBSize, mostDifferentiatingNodes, nMostDifferentiatingNodes);
-
 		System.out.println();
 		System.out.println("Process Complete");
-	}
-
-	static class Page {
-		List<ConceptId> items;
-
-		public Page() {
-		}
-
-		public List<ConceptId> getItems() {
-			return items;
-		}
-
-		public void setItems(List<ConceptId> items) {
-			this.items = items;
-		}
-	}
-
-	static class ConceptId {
-		String conceptId;
-
-		public ConceptId() {
-		}
-
-		public String getConceptId() {
-			return conceptId;
-		}
-	}
-
-	private Set<String> getConcepts(String ecl) throws JsonProcessingException {
-		RestTemplate restTemplate = new RestTemplate();
-		ResponseEntity<String> page = restTemplate.getForEntity("https://snowstorm.ihtsdotools.org/snowstorm/snomed-ct/MAIN/concepts?ecl=" + ecl, String.class);
-		ObjectMapper objectMapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-		Page page1 = objectMapper.readValue(page.getBody(), Page.class);
-		return page1.items.stream().map(ConceptId::getConceptId).collect(Collectors.toSet());
 	}
 
 	private Map<String, Set<String>> loadCohorts(String instanceCohorts) {
@@ -252,167 +210,57 @@ public class GraphClustering {
 		}
 	}
 
-	static class Score implements Comparable<Score> {
+	private List<Node> getNodesRankedByDifferenceAndGain(GraphBuilder knowledgeGraph, Set<String> allCodesUsed, int groupASize, int groupBSize, int maxClusters, float minDiff) {
 
-		private float diff;
-		private float gain;
+		Comparator<Node> maxDiffMaxDepthComparator = Comparator.comparing(Node::getGroupDifferenceWithSubtypes).thenComparing(Node::getDepth).reversed();
 
-		public Score(float diff, float lastDiff) {
-			this.diff = diff;
-			this.gain = (diff - lastDiff) / ((diff + lastDiff) / 2f);
+		Node rootNode = knowledgeGraph.getRootNode();
+		rootNode.recordDepth(0);
+
+		Set<Node> candidateNodes = calculateNodeDiffAndCollect(allCodesUsed, knowledgeGraph, groupASize, groupBSize, false);
+
+		List<Node> bestNodes = new ArrayList<>();
+		while (bestNodes.size() < maxClusters && !candidateNodes.isEmpty()) {
+			List<Node> sortedNodes = new ArrayList<>(candidateNodes);
+			sortedNodes.sort(maxDiffMaxDepthComparator);
+			Node candidateNode = sortedNodes.get(0);
+			if (candidateNode.getGroupDifferenceWithSubtypes() < minDiff) {
+				break;
+			}
+			if (!anySubsumption(candidateNode, bestNodes)) {
+				bestNodes.add(candidateNode);
+				// Clear diff of all descendants
+				calculateNodeDiffAndCollect(candidateNode.getCodeAndDescendantCodes(new HashSet<>()), knowledgeGraph, groupASize, groupBSize, true);
+			}
+			if (candidateNodes.remove(candidateNode)) {
+				System.out.println("Failed to remove");
+			}
 		}
-
-		public float getDiff() {
-			return diff;
-		}
-
-		public float getGain() {
-			return gain;
-		}
-
-		public float getScore() {
-			return diff + gain;
-		}
-
-		@Override
-		public int compareTo(Score other) {
-			return Float.compare(getScore(), other.getScore());
-		}
+		return bestNodes;
 	}
 
-	private List<Pair<String, Float>> getNodesRankedByDifferenceAndGain(GraphBuilder knowledgeGraph, Set<String> allCodesUsed, int groupASize, int groupBSize,
-			int upwardLevelLimit, double minDiff, double minGainToCluster, Set<String> obConcepts) {
-
-		Map<String, Float> chosenDiffStrengths = new HashMap<>();
-		Map<String, Float> nodeDiffCache = new HashMap<>();
+	private static Set<Node> calculateNodeDiffAndCollect(Set<String> allCodesUsed, GraphBuilder knowledgeGraph, int groupASize, int groupBSize, boolean forceZero) {
+		Set<Node> nodes = new HashSet<>();
 		for (String codeUsed : allCodesUsed) {
-			System.out.println("Checking " + codeUsed);
-
 			Node node = knowledgeGraph.getNode(codeUsed);
-			float groupDifferenceWithSubtypes = node.getGroupDifferenceWithSubtypes(groupASize, groupBSize);
-
-			if (obConcepts.contains(codeUsed) && groupDifferenceWithSubtypes > 0.03) {
-				System.out.println("DEBUG!");
-			}
-
-			AtomicInteger ancestorDistance = new AtomicInteger(0);
-			Map<ConceptIdDistanceKey, Float> ancestorGroupDifferenceWithSubtypesMap =
-					getAncestorGroupDifferenceWithSubtypes(node, groupASize, groupBSize, upwardLevelLimit, new TreeMap<>(), nodeDiffCache, ancestorDistance);
-
-			String clusterConceptCandidate = node.getCode();
-			float bestDiff = groupDifferenceWithSubtypes;
-			for (Map.Entry<ConceptIdDistanceKey, Float> ancestorMapEntry : ancestorGroupDifferenceWithSubtypesMap.entrySet()) {
-				String ancestorCode = ancestorMapEntry.getKey().getCode();
-				float ancestorGroupDifferenceWithSubtypes = ancestorMapEntry.getValue();
-				if (ancestorGroupDifferenceWithSubtypes < minDiff) {
-					continue;
-				}
-				// Calculate gain
-				float gainBetweenNodes = calculateGainBetweenNodes(groupDifferenceWithSubtypes, ancestorGroupDifferenceWithSubtypes);
-				node.setGainBetweenNodes(gainBetweenNodes);
-				if (clusterConceptCandidate.equals("414915002")) { // Obese
-					System.out.println("debug");
-				}
-
-				if (ancestorGroupDifferenceWithSubtypes > bestDiff && gainBetweenNodes > minGainToCluster) {
-					clusterConceptCandidate = ancestorCode;
-					bestDiff = ancestorGroupDifferenceWithSubtypes;
-				}
-			}
-			if (bestDiff > minDiff) {
-				chosenDiffStrengths.put(clusterConceptCandidate, bestDiff);
-				System.out.println("Chose " + clusterConceptCandidate + " with " + bestDiff);
-			} else {
-				System.out.println("Chose none");
-			}
-
-//			nodeDiffStrengths.put(codeUsed, difference);
-//			for (Node ancestor : node.getAncestors()) {
-//				String ancestorCode = ancestor.getCode();
-//				if (!nodeDiffStrengths.containsKey(ancestorCode)) {
-//					float ancestorDifference = ancestor.getScaledAggregatedDifference(groupASize, groupBSize);
-//					nodeDiffStrengths.put(ancestorCode, ancestorDifference);
-//				}
-//			}
-		}
-		return chosenDiffStrengths.entrySet().stream()
-				.sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
-				.map(entry -> new Pair<>(entry.getKey(), entry.getValue()))
-				.collect(Collectors.toList());
-	}
-
-	private float calculateGainBetweenNodes(float nodeDiff, float ancestorDiff) {
-		return (ancestorDiff / nodeDiff) - 1;
-	}
-
-	private static class ConceptIdDistanceKey implements Comparable<ConceptIdDistanceKey> {
-		private final String code;
-		private final Integer distance;
-
-		public ConceptIdDistanceKey(String code, Integer distance) {
-			this.code = code;
-			this.distance = distance;
-		}
-
-		public String getCode() {
-			return code;
-		}
-
-		@Override
-		public int compareTo(ConceptIdDistanceKey other) {
-			return distance.compareTo(other.distance);
-		}
-	}
-
-	private Map<ConceptIdDistanceKey, Float> getAncestorGroupDifferenceWithSubtypes(Node node, int groupASize, int groupBSize, int upwardLevelLimit,
-			Map<ConceptIdDistanceKey, Float> diffs, Map<String, Float> nodeDiffCache, AtomicInteger ancestorDistance) {
-
-		if (upwardLevelLimit == 0) {
-			return diffs;
-		}
-
-		for (Node parent : node.getParents()) {
-			ancestorDistance.incrementAndGet();
-			String parentCode = parent.getCode();
-			float parentDiff = nodeDiffCache.computeIfAbsent(parentCode, c -> parent.getGroupDifferenceWithSubtypes(groupASize, groupBSize));
-			diffs.put(new ConceptIdDistanceKey(parentCode, ancestorDistance.get()), parentDiff);
-			getAncestorGroupDifferenceWithSubtypes(parent, groupASize, groupBSize, upwardLevelLimit -1, diffs, nodeDiffCache, ancestorDistance);
-		}
-
-		return diffs;
-	}
-
-	private List<Pair<String, Float>> getNodesRankedByDifference(GraphBuilder knowledgeGraph, Set<String> allCodesUsed, int groupASize, int groupBSize, int upwardLevelLimit) {
-		Map<String, Float> nodeDiffStrengths = new HashMap<>();
-		for (String codeUsed : allCodesUsed) {
-			if (!nodeDiffStrengths.containsKey(codeUsed)) {
-				Node node = knowledgeGraph.getNode(codeUsed);
-				float difference = node.getGroupDifferenceWithSubtypes(groupASize, groupBSize);
-				nodeDiffStrengths.put(codeUsed, difference);
-				for (Node ancestor : node.getAncestors()) {
-					String ancestorCode = ancestor.getCode();
-					if (!nodeDiffStrengths.containsKey(ancestorCode)) {
-						float ancestorDifference = ancestor.getGroupDifferenceWithSubtypes(groupASize, groupBSize);
-						nodeDiffStrengths.put(ancestorCode, ancestorDifference);
-					}
-				}
+			node.calculateGroupDifferenceWithSubtypes(groupASize, groupBSize, forceZero);
+			nodes.add(node);
+			for (Node ancestor : node.getAncestors()) {
+				ancestor.calculateGroupDifferenceWithSubtypes(groupASize, groupBSize, forceZero);
+				nodes.add(ancestor);
 			}
 		}
-		return nodeDiffStrengths.entrySet().stream()
-				.sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
-				.map(entry -> new Pair<>(entry.getKey(), entry.getValue()))
-				.collect(Collectors.toList());
+		return nodes;
 	}
 
-	private Map<String, Integer> getNodeCounts(Map<String, Set<String>> groupAInstanceGraphs) {
-		Map<String, AtomicInteger> nodeCounts = new HashMap<>();
-		for (Set<String> kNodes : groupAInstanceGraphs.values()) {
-			for (String kNode : kNodes) {
-				nodeCounts.computeIfAbsent(kNode, k -> new AtomicInteger()).incrementAndGet();
+	private boolean anySubsumption(Node node, List<Node> otherNodes) {
+		Set<Node> nodeAncestors = node.getAncestors();
+		for (Node otherNode : otherNodes) {
+			if (nodeAncestors.contains(otherNode) || otherNode.getAncestors().contains(node)) {
+				return true;
 			}
 		}
-		return nodeCounts.entrySet().stream()
-				.collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().get()));
+		return false;
 	}
 
 	private GraphBuilder loadKnowledgeGraph(String knowledgeGraphHierarchy) {
