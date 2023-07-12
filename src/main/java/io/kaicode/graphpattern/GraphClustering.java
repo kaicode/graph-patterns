@@ -141,12 +141,12 @@ public class GraphClustering {
 					clustersWriter.write("\t");
 					clustersWriter.write(label);
 					clustersWriter.write("\t");
-					Set<Node> descendantSet = node.getDescendants();
-					List<Node> descendants = descendantSet.stream()
+					Set<Node> descendantAndSelfSet = node.getDescendantsAndSelf();
+					List<Node> descendantsFilteredSorted = descendantAndSelfSet.stream()
 							.filter(n -> allCodesUsed.contains(n.getCode()))
 							.sorted(MAX_DIFF_MAX_DEPTH_COMPARATOR)
 							.collect(Collectors.toList());
-					clustersWriter.write(descendants.stream().map(Node::getCode).collect(Collectors.joining(",")));
+					clustersWriter.write(descendantsFilteredSorted.stream().map(Node::getCode).collect(Collectors.joining(",")));
 					clustersWriter.newLine();
 					System.out.printf("Node %s diff strength %s %s%n", code, difference, label != null ? label : "");
 				}

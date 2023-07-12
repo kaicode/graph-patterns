@@ -163,8 +163,9 @@ public class Node {
 		return depth;
 	}
 
-	public Set<Node> getDescendants() {
+	public Set<Node> getDescendantsAndSelf() {
 		Set<Node> nodes = new HashSet<>();
+		nodes.add(this);
 		getDescendants(nodes);
 		return nodes;
 	}
