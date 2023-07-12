@@ -108,7 +108,8 @@ public class GraphClustering {
 
 		int groupASize = groupAInstanceGraphs.size();
 		int groupBSize = groupBInstanceGraphs.size();
-		List<Node> nodesRankedByDifference = getNodesRankedByDifferenceAndGain(knowledgeGraph, allCodesUsed, groupASize, groupBSize, maxClusters, minDiff);
+		Set<String> codeBanList = new HashSet<>(knowledgeGraph.getRootNode().getChildren().stream().map(Node::getCode).collect(Collectors.toSet()));
+		List<Node> nodesRankedByDifference = getNodesRankedByDifferenceAndGain(knowledgeGraph, allCodesUsed, groupASize, groupBSize, maxClusters, minDiff, codeBanList);
 
 		Set<String> chosenNodes = new HashSet<>();
 		Map<String, Float> chosenNodeStrengths = new HashMap<>();
@@ -212,12 +213,13 @@ public class GraphClustering {
 		}
 	}
 
-	private List<Node> getNodesRankedByDifferenceAndGain(GraphBuilder knowledgeGraph, Set<String> allCodesUsed, int groupASize, int groupBSize, int maxClusters, float minDiff) {
+	private List<Node> getNodesRankedByDifferenceAndGain(GraphBuilder knowledgeGraph, Set<String> allCodesUsed, int groupASize, int groupBSize,
+			int maxClusters, float minDiff, Set<String> codeBanList) {
 
 		Node rootNode = knowledgeGraph.getRootNode();
 		rootNode.recordDepth(0);
 
-		Set<Node> candidateNodes = calculateNodeDiffAndCollect(allCodesUsed, knowledgeGraph, groupASize, groupBSize, false);
+		Set<Node> candidateNodes = calculateNodeDiffAndCollect(allCodesUsed, knowledgeGraph, groupASize, groupBSize, codeBanList, false);
 
 		List<Node> bestNodes = new ArrayList<>();
 		while (bestNodes.size() < maxClusters && !candidateNodes.isEmpty()) {
@@ -230,7 +232,7 @@ public class GraphClustering {
 			if (!anySubsumption(candidateNode, bestNodes)) {
 				bestNodes.add(candidateNode);
 				// Clear diff of all descendants
-				calculateNodeDiffAndCollect(candidateNode.getCodeAndDescendantCodes(new HashSet<>()), knowledgeGraph, groupASize, groupBSize, true);
+				calculateNodeDiffAndCollect(candidateNode.getCodeAndDescendantCodes(new HashSet<>()), knowledgeGraph, groupASize, groupBSize, codeBanList, true);
 			}
 			if (candidateNodes.remove(candidateNode)) {
 				System.out.println("Failed to remove");
@@ -239,15 +241,19 @@ public class GraphClustering {
 		return bestNodes;
 	}
 
-	private static Set<Node> calculateNodeDiffAndCollect(Set<String> allCodesUsed, GraphBuilder knowledgeGraph, int groupASize, int groupBSize, boolean forceZero) {
+	private static Set<Node> calculateNodeDiffAndCollect(Set<String> allCodesUsed, GraphBuilder knowledgeGraph, int groupASize, int groupBSize, Set<String> codeBanList, boolean forceZero) {
 		Set<Node> nodes = new HashSet<>();
 		for (String codeUsed : allCodesUsed) {
 			Node node = knowledgeGraph.getNode(codeUsed);
 			node.calculateGroupDifferenceWithSubtypes(groupASize, groupBSize, forceZero);
-			nodes.add(node);
+			if (!codeBanList.contains(node.getCode())) {
+				nodes.add(node);
+			}
 			for (Node ancestor : node.getAncestors()) {
 				ancestor.calculateGroupDifferenceWithSubtypes(groupASize, groupBSize, forceZero);
-				nodes.add(ancestor);
+				if (!codeBanList.contains(ancestor.getCode())) {
+					nodes.add(ancestor);
+				}
 			}
 		}
 		return nodes;
