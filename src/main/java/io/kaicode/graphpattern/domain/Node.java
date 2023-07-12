@@ -172,7 +172,7 @@ public class Node {
 	private void getDescendants(Set<Node> nodes) {
 		for (Node child : children) {
 			nodes.add(child);
-			child.getDescendants();
+			child.getDescendants(nodes);
 		}
 	}
 
