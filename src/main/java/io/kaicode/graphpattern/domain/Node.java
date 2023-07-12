@@ -163,6 +163,10 @@ public class Node {
 		return depth;
 	}
 
+	public int getInstanceCount() {
+		return groupAInstanceIds.size() + groupBInstanceIds.size();
+	}
+
 	public Set<Node> getDescendantsAndSelf() {
 		Set<Node> nodes = new HashSet<>();
 		nodes.add(this);

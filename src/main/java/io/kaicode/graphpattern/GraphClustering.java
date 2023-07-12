@@ -119,14 +119,18 @@ public class GraphClustering {
 			System.err.println("Failed to create output directory");
 		}
 		String clusterFilename = "output/clusters.txt";
+		String clusterConceptLabelsFilename = "output/clusters-with-labels.txt";
 		String codeMapFilename = "output/instance-code-cluster-map.txt";
 		try (BufferedWriter clustersWriter = new BufferedWriter(new FileWriter(clusterFilename));
+			 BufferedWriter clustersWithLabelsWriter = new BufferedWriter(new FileWriter(clusterConceptLabelsFilename));
 			 BufferedWriter clusterMapWriter = new BufferedWriter(new FileWriter(codeMapFilename))) {
 
 			System.out.println();
 			System.out.printf("Top %s differentiating nodes:%n", maxClusters);
-			clustersWriter.write("code\tdiffStrength\tdisplay\tclusterCodes");
+			clustersWriter.write("clusterCode\tdiffStrength\tdisplay\tincludedCodes");
 			clustersWriter.newLine();
+			clustersWithLabelsWriter.write("clusterCode\tdiffStrength\tdisplay\tincludedCode\tincludedCodeDiffStrength\tincludedCodeDisplay");
+			clustersWithLabelsWriter.newLine();
 			for (int i = 0; chosenNodes.size() < Math.min(maxClusters, nodesRankedByDifference.size()); i++) {
 				Node node = nodesRankedByDifference.get(i);
 				String code = node.getCode();
@@ -148,6 +152,24 @@ public class GraphClustering {
 							.collect(Collectors.toList());
 					clustersWriter.write(descendantsFilteredSorted.stream().map(Node::getCode).collect(Collectors.joining(",")));
 					clustersWriter.newLine();
+
+					for (Node includedCode : descendantsFilteredSorted) {
+						// clusterCode	diffStrength	display	includedCode	includedCodeDiffStrength	includedCodeInstanceCount	includedCodeDisplay
+						clustersWithLabelsWriter.write(code);
+						clustersWithLabelsWriter.write("\t");
+						clustersWithLabelsWriter.write(difference.toString());
+						clustersWithLabelsWriter.write("\t");
+						clustersWithLabelsWriter.write(label);
+						clustersWithLabelsWriter.write("\t");
+						clustersWithLabelsWriter.write(includedCode.getCode());
+						clustersWithLabelsWriter.write("\t");
+						clustersWithLabelsWriter.write(includedCode.getGroupDifferenceWithSubtypesBackup() + "");
+						clustersWithLabelsWriter.write("\t");
+						clustersWithLabelsWriter.write(Integer.toString(includedCode.getInstanceCount()));
+						clustersWithLabelsWriter.write("\t");
+						clustersWithLabelsWriter.write(knowledgeGraphLabels.get(includedCode.getCode()));
+						clustersWithLabelsWriter.newLine();
+					}
 					System.out.printf("Node %s diff strength %s %s%n", code, difference, label != null ? label : "");
 				}
 			}
