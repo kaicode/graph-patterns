@@ -149,6 +149,9 @@ public class GraphClustering {
 					Float difference = node.getGroupDifferenceWithSubtypesBackup();
 					chosenNodeStrengths.put(code, difference);
 					String label = knowledgeGraphLabels.get(code);
+					if (label == null) {
+						label = code;
+					}
 					clustersWriter.write(code);
 					clustersWriter.write("\t");
 					clustersWriter.write(label);
@@ -183,7 +186,7 @@ public class GraphClustering {
 						clustersWithLabelsWriter.write(Integer.toString(includedCode.getInstanceCount()));
 						clustersWithLabelsWriter.newLine();
 					}
-					System.out.printf("Node %s diff strength %s %s%n", code, difference, label != null ? label : "");
+					System.out.printf("Node %s diff strength %s %s%n", code, difference, label);
 				}
 			}
 			System.out.println();
