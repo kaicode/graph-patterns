@@ -262,24 +262,49 @@ public class GraphClustering {
 
 		Set<Node> candidateNodes = calculateNodeDiffAndCollect(allCodesUsed, knowledgeGraph, groupASize, groupBSize, codeBanList, false);
 
-		List<Node> bestNodes = new ArrayList<>();
-		while (bestNodes.size() < maxClusters && !candidateNodes.isEmpty()) {
-			List<Node> sortedNodes = new ArrayList<>(candidateNodes);
+		List<Node> bestNodesWithPositiveScore = new ArrayList<>();
+		Set<Node> candidateNodesForPositive = new HashSet<>(candidateNodes);
+		while (bestNodesWithPositiveScore.size() < maxClusters && !candidateNodesForPositive.isEmpty()) {
+			List<Node> sortedNodes = new ArrayList<>(candidateNodesForPositive);
 			sortedNodes.sort(MAX_DIFF_MAX_DEPTH_COMPARATOR);
 			Node candidateNode = sortedNodes.get(0);
 			if (candidateNode.getGroupDifferenceWithSubtypes() < minDiff) {
 				break;
 			}
-			if (!anySubsumption(candidateNode, bestNodes)) {
-				bestNodes.add(candidateNode);
+			if (!anySubsumption(candidateNode, bestNodesWithPositiveScore)) {
+				bestNodesWithPositiveScore.add(candidateNode);
 				// Clear diff of all descendants
 				calculateNodeDiffAndCollect(candidateNode.getCodeAndDescendantCodes(new HashSet<>()), knowledgeGraph, groupASize, groupBSize, codeBanList, true);
 			}
-			if (candidateNodes.remove(candidateNode)) {
+			if (candidateNodesForPositive.remove(candidateNode)) {
 				System.out.println("Failed to remove");
 			}
 		}
-		return bestNodes;
+
+		List<Node> bestNodesWithNegativeScore = new ArrayList<>();
+		Set<Node> candidateNodesForNegative = new HashSet<>(candidateNodes);
+		while (bestNodesWithNegativeScore.size() < maxClusters && !candidateNodesForNegative.isEmpty()) {
+			List<Node> sortedNodes = new ArrayList<>(candidateNodesForNegative);
+			sortedNodes.sort(MAX_DIFF_MAX_DEPTH_COMPARATOR);
+			Collections.reverse(sortedNodes);
+			Node candidateNode = sortedNodes.get(0);
+			if (candidateNode.getGroupDifferenceWithSubtypes() * -1 < minDiff) {
+				break;
+			}
+			if (!anySubsumption(candidateNode, bestNodesWithNegativeScore)) {
+				bestNodesWithNegativeScore.add(candidateNode);
+				// Clear diff of all descendants
+				calculateNodeDiffAndCollect(candidateNode.getCodeAndDescendantCodes(new HashSet<>()), knowledgeGraph, groupASize, groupBSize, codeBanList, true);
+			}
+			if (candidateNodesForNegative.remove(candidateNode)) {
+				System.out.println("Failed to remove");
+			}
+		}
+
+		List<Node> allBestNodes = new ArrayList<>(bestNodesWithPositiveScore);
+		allBestNodes.addAll(bestNodesWithNegativeScore);
+
+		return allBestNodes;
 	}
 
 	private static Set<Node> calculateNodeDiffAndCollect(Set<String> allCodesUsed, GraphBuilder knowledgeGraph, int groupASize, int groupBSize, Set<String> codeBanList, boolean forceZero) {
