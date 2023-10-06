@@ -13,14 +13,18 @@ import static java.lang.String.format;
 public class GraphClustering {
 
 	public static final Comparator<Node> MAX_DIFF_MAX_DEPTH_COMPARATOR = Comparator
-			.comparing(Node::getGroupDifferenceWithSubtypes)
+			.comparing(Node::getDepthBoostedAggregateGroupDifference)
 			.thenComparing(Node::getDepth)
 			.reversed();
 
 	public static final Comparator<Node> MAX_DIFF_MAX_DEPTH_COMPARATOR_USING_DIFF_BACKUP = Comparator
-			.comparing(Node::getGroupDifferenceWithSubtypesBackup)
+			.comparing(Node::getDepthBoostedAggregateGroupDifferenceBackup)
 			.thenComparing(Node::getDepth)
 			.reversed();
+
+	public static float depthMultiplier;
+	private final float minDiff;
+	private final int maxClusters;
 
 	// Load knowledge graph
 	// Load instance graphs
@@ -46,13 +50,22 @@ public class GraphClustering {
 		String instanceData = args[2];
 		String instanceCohorts = args[3];
 		String groupBIndicator = args[4];
+
+		float depthMultiplier = 0.3f;
 		float minDiff = Float.parseFloat(args[5]);
 		int maxClusters = Integer.parseInt(args[6]);
-		new GraphClustering().run(knowledgeGraphHierarchy, knowledgeGraphLabels, instanceData, instanceCohorts, groupBIndicator, minDiff, maxClusters);
+
+		new GraphClustering(depthMultiplier, minDiff, maxClusters)
+				.run(knowledgeGraphHierarchy, knowledgeGraphLabels, instanceData, instanceCohorts, groupBIndicator);
 	}
 
-	private void run(String knowledgeGraphHierarchy, String knowledgeGraphLabelsPath, String instanceData, String instanceCohorts, String groupBIndicator,
-			float minDiff, int maxClusters) {
+	public GraphClustering(float depthMultiplier, float minDiff, int maxClusters) {
+		GraphClustering.depthMultiplier = depthMultiplier;
+		this.minDiff = minDiff;
+		this.maxClusters = maxClusters;
+	}
+
+	private void run(String knowledgeGraphHierarchy, String knowledgeGraphLabelsPath, String instanceData, String instanceCohorts, String groupBIndicator) {
 
 		System.out.println("< Graph Pattern Analysis >");
 		System.out.println();
@@ -125,7 +138,9 @@ public class GraphClustering {
 		int groupASize = groupAInstanceGraphs.size();
 		int groupBSize = groupBInstanceGraphs.size();
 		Set<String> codeBanList = new HashSet<>(knowledgeGraph.getRootNode().getChildren().stream().map(Node::getCode).collect(Collectors.toSet()));
-		List<Node> nodesRankedByDifference = getNodesRankedByDifferenceAndGain(knowledgeGraph, allCodesUsed, groupASize, groupBSize, maxClusters, minDiff, codeBanList);
+		List<Node> nodesRankedByDifference = getNodesRankedByDifferenceAndGain(knowledgeGraph, allCodesUsed, groupASize, groupBSize, codeBanList);
+
+		Node rootNode = knowledgeGraph.getRootNode();
 
 		Set<String> chosenNodes = new HashSet<>();
 		Map<String, Float> chosenNodeStrengths = new HashMap<>();
@@ -153,7 +168,7 @@ public class GraphClustering {
 				String code = node.getCode();
 				if (!code.equals(groupBIndicator)) {
 					chosenNodes.add(code);
-					Float difference = node.getGroupDifferenceWithSubtypesBackup();
+					Float difference = node.getDepthBoostedAggregateGroupDifferenceBackup();
 					chosenNodeStrengths.put(code, difference);
 					String label = knowledgeGraphLabels.get(code);
 					if (label == null) {
@@ -188,7 +203,7 @@ public class GraphClustering {
 						clustersWithLabelsWriter.write("\t");
 						clustersWithLabelsWriter.write(knowledgeGraphLabels.get(includedCode.getCode()));
 						clustersWithLabelsWriter.write("\t");
-						clustersWithLabelsWriter.write(includedCode.getGroupDifferenceWithSubtypesBackup() + "");
+						clustersWithLabelsWriter.write(includedCode.getDepthBoostedAggregateGroupDifferenceBackup() + "");
 						clustersWithLabelsWriter.write("\t");
 						clustersWithLabelsWriter.write(Integer.toString(includedCode.getInstanceCount()));
 						clustersWithLabelsWriter.newLine();
@@ -261,8 +276,7 @@ public class GraphClustering {
 		}
 	}
 
-	private List<Node> getNodesRankedByDifferenceAndGain(GraphBuilder knowledgeGraph, Set<String> allCodesUsed, int groupASize, int groupBSize,
-			int maxClusters, float minDiff, Set<String> codeBanList) {
+	private List<Node> getNodesRankedByDifferenceAndGain(GraphBuilder knowledgeGraph, Set<String> allCodesUsed, int groupASize, int groupBSize, Set<String> codeBanList) {
 
 		Node rootNode = knowledgeGraph.getRootNode();
 		rootNode.recordDepth(0);
@@ -275,7 +289,7 @@ public class GraphClustering {
 			List<Node> sortedNodes = new ArrayList<>(candidateNodesForPositive);
 			sortedNodes.sort(MAX_DIFF_MAX_DEPTH_COMPARATOR);
 			Node candidateNode = sortedNodes.get(0);
-			if (candidateNode.getGroupDifferenceWithSubtypes() < minDiff) {
+			if (candidateNode.getDepthBoostedAggregateGroupDifference() < minDiff) {
 				break;
 			}
 			if (!anySubsumption(candidateNode, bestNodesWithPositiveScore)) {
@@ -295,7 +309,7 @@ public class GraphClustering {
 			sortedNodes.sort(MAX_DIFF_MAX_DEPTH_COMPARATOR);
 			Collections.reverse(sortedNodes);
 			Node candidateNode = sortedNodes.get(0);
-			if (candidateNode.getGroupDifferenceWithSubtypes() * -1 < minDiff) {
+			if (candidateNode.getDepthBoostedAggregateGroupDifference() * -1 < minDiff) {
 				break;
 			}
 			if (!anySubsumption(candidateNode, bestNodesWithNegativeScore)) {
@@ -314,7 +328,7 @@ public class GraphClustering {
 		return allBestNodes;
 	}
 
-	private static Set<Node> calculateNodeDiffAndCollect(Set<String> allCodesUsed, GraphBuilder knowledgeGraph, int groupASize, int groupBSize, Set<String> codeBanList, boolean forceZero) {
+	private Set<Node> calculateNodeDiffAndCollect(Set<String> allCodesUsed, GraphBuilder knowledgeGraph, int groupASize, int groupBSize, Set<String> codeBanList, boolean forceZero) {
 		Set<Node> nodes = new HashSet<>();
 		for (String codeUsed : allCodesUsed) {
 			Node node = knowledgeGraph.getNode(codeUsed);

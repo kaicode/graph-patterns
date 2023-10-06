@@ -1,5 +1,7 @@
 package io.kaicode.graphpattern.domain;
 
+import io.kaicode.graphpattern.GraphClustering;
+
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
@@ -14,8 +16,8 @@ public class Node {
 	private Set<Node> links;
 	private final Set<String> groupAInstanceIds;
 	private final Set<String> groupBInstanceIds;
-	private float groupDifferenceWithSubtypes = -2;
-	private float groupDifferenceWithSubtypesBackup = 0;
+	private float aggregateGroupDifference = -2;
+	private float aggregateGroupDifferenceBackup = 0;
 	private int depth;
 
 	public Node(String code) {
@@ -28,8 +30,8 @@ public class Node {
 
 	public static Node newTestNode(String code, float groupDifference, int depth) {
 		Node node = new Node(code);
-		node.groupDifferenceWithSubtypes = groupDifference;
-		node.groupDifferenceWithSubtypesBackup = groupDifference;
+		node.aggregateGroupDifference = groupDifference;
+		node.aggregateGroupDifferenceBackup = groupDifference;
 		node.depth = depth;
 		return node;
 	}
@@ -102,27 +104,35 @@ public class Node {
 
 	public void calculateGroupDifferenceWithSubtypes(int groupASize, int groupBSize, boolean forceZero) {
 		if (forceZero) {
-			groupDifferenceWithSubtypes = 0;
-		} else if (groupDifferenceWithSubtypes == -2) {
+			aggregateGroupDifference = 0;
+		} else if (aggregateGroupDifference == -2) {
 			// Count unique patients for this concept and all descendants, in each group
 			int conceptAndDescendantsInstanceCountInGroupA = getAggregateGroupACount();
 			int conceptAndDescendantsInstanceCountInGroupB = getAggregateGroupBCount();
 
 			float aStrength = conceptAndDescendantsInstanceCountInGroupA / (float) groupASize;
 			float bStrength = conceptAndDescendantsInstanceCountInGroupB / (float) groupBSize;
-			this.groupDifferenceWithSubtypes = bStrength - aStrength;
-			if (this.groupDifferenceWithSubtypesBackup == 0) {
-				this.groupDifferenceWithSubtypesBackup = groupDifferenceWithSubtypes;
+			this.aggregateGroupDifference = bStrength - aStrength;
+			if (this.aggregateGroupDifferenceBackup == 0) {
+				this.aggregateGroupDifferenceBackup = aggregateGroupDifference;
 			}
 		}
 	}
 
-	public Float getGroupDifferenceWithSubtypes() {
-		return groupDifferenceWithSubtypes;
+	public Float getDepthBoostedAggregateGroupDifference() {
+		return aggregateGroupDifference * (1 + (depth * GraphClustering.depthMultiplier));
 	}
 
-	public float getGroupDifferenceWithSubtypesBackup() {
-		return groupDifferenceWithSubtypesBackup;
+	public float getDepthBoostedAggregateGroupDifferenceBackup() {
+		return aggregateGroupDifferenceBackup * (1 + (depth * GraphClustering.depthMultiplier));
+	}
+
+	public Float getAggregateGroupDifference() {
+		return aggregateGroupDifference;
+	}
+
+	public float getAggregateGroupDifferenceBackup() {
+		return aggregateGroupDifferenceBackup;
 	}
 
 	private int getAggregateGroupACount() {
