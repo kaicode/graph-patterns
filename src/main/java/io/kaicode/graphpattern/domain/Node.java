@@ -18,6 +18,8 @@ public class Node {
 	private final Set<String> groupBInstanceIds;
 	private float aggregateGroupDifference = -2;
 	private float aggregateGroupDifferenceBackup = 0;
+	private float boostedAggregateGroupDifference = 0;
+	private float boostedAggregateGroupDifferenceBackup = 0;
 	private int depth = 100_000;
 
 	public Node(String code) {
@@ -31,8 +33,8 @@ public class Node {
 	public static Node newTestNode(String code, float groupDifference, int depth) {
 		Node node = new Node(code);
 		node.aggregateGroupDifference = groupDifference;
-		node.aggregateGroupDifferenceBackup = groupDifference;
 		node.depth = depth;
+		node.updateAllDiffVariables();
 		return node;
 	}
 
@@ -105,6 +107,7 @@ public class Node {
 	public void calculateGroupDifferenceWithSubtypes(int groupASize, int groupBSize, boolean forceZero) {
 		if (forceZero) {
 			aggregateGroupDifference = 0;
+			boostedAggregateGroupDifference = 0;
 		} else if (aggregateGroupDifference == -2) {
 			// Count unique patients for this concept and all descendants, in each group
 			int conceptAndDescendantsInstanceCountInGroupA = getAggregateGroupACount();
@@ -113,18 +116,24 @@ public class Node {
 			float aStrength = conceptAndDescendantsInstanceCountInGroupA / (float) groupASize;
 			float bStrength = conceptAndDescendantsInstanceCountInGroupB / (float) groupBSize;
 			this.aggregateGroupDifference = bStrength - aStrength;
-			if (this.aggregateGroupDifferenceBackup == 0) {
-				this.aggregateGroupDifferenceBackup = aggregateGroupDifference;
-			}
+			updateAllDiffVariables();
+		}
+	}
+
+	private void updateAllDiffVariables() {
+		this.boostedAggregateGroupDifference = aggregateGroupDifference * (1 + (depth * GraphClustering.depthMultiplier));
+		if (this.boostedAggregateGroupDifferenceBackup == 0) {
+			this.aggregateGroupDifferenceBackup = aggregateGroupDifference;
+			this.boostedAggregateGroupDifferenceBackup = boostedAggregateGroupDifference;
 		}
 	}
 
 	public Float getDepthBoostedAggregateGroupDifference() {
-		return aggregateGroupDifference * (1 + (depth * GraphClustering.depthMultiplier));
+		return boostedAggregateGroupDifference;
 	}
 
 	public float getDepthBoostedAggregateGroupDifferenceBackup() {
-		return aggregateGroupDifferenceBackup * (1 + (depth * GraphClustering.depthMultiplier));
+		return boostedAggregateGroupDifferenceBackup;
 	}
 
 	public Float getAggregateGroupDifference() {
@@ -206,7 +215,7 @@ public class Node {
 
 	@Override
 	public String toString() {
-		return code + " diff:" + aggregateGroupDifferenceBackup + " depth:" + depth + " label:" + label;
+		return "diff:" + aggregateGroupDifferenceBackup + " boosted diff:" + boostedAggregateGroupDifferenceBackup + " depth:" + depth + " code:" + code + " label:" + label;
 	}
 
 	@Override

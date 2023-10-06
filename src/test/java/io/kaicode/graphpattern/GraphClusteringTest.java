@@ -19,7 +19,10 @@ class GraphClusteringTest {
 		nodes.add(Node.newTestNode("C", 0.01f, 1));
 		nodes.add(Node.newTestNode("D", 0.02f, 5));
 		nodes.sort(GraphClustering.MAX_DIFF_MAX_DEPTH_COMPARATOR);
-		assertEquals("[A diff:0.1 depth:3, B diff:0.1 depth:2, D diff:0.02 depth:5, C diff:0.01 depth:1]", Arrays.toString(nodes.toArray()));
+		assertEquals("[diff:0.1 boosted diff:0.1 depth:3 code:A label:null, " +
+				"diff:0.1 boosted diff:0.1 depth:2 code:B label:null, " +
+				"diff:0.02 boosted diff:0.02 depth:5 code:D label:null, " +
+				"diff:0.01 boosted diff:0.01 depth:1 code:C label:null]", Arrays.toString(nodes.toArray()));
 	}
 
 }
