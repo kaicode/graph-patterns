@@ -59,6 +59,13 @@ public class GraphClustering {
 
 		GraphBuilder knowledgeGraph = loadKnowledgeGraph(knowledgeGraphHierarchy);
 		Map<String, String> knowledgeGraphLabels = loadKnowledgeGraphLabels(knowledgeGraphLabelsPath);
+		for (Map.Entry<String, String> labelEntry : knowledgeGraphLabels.entrySet()) {
+			String code = labelEntry.getKey();
+			Node node = knowledgeGraph.getNode(code);
+			if (node != null) {
+				node.setLabel(labelEntry.getValue());
+			}
+		}
 
 		Map<String, Set<String>> allInstanceGraphs = loadInstanceGraphs(instanceData);
 		Map<String, Set<String>> cohortInstanceMap = loadCohorts(instanceCohorts);

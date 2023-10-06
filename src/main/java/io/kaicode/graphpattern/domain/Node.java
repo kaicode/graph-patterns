@@ -8,6 +8,7 @@ import java.util.Set;
 public class Node {
 
 	private final String code;
+	private String label;
 	private final Set<Node> parents;
 	private final Set<Node> children;
 	private Set<Node> links;
@@ -189,9 +190,13 @@ public class Node {
 		}
 	}
 
+	public void setLabel(String label) {
+		this.label = label;
+	}
+
 	@Override
 	public String toString() {
-		return code + " diff:" + groupDifferenceWithSubtypesBackup + " depth:" + depth;
+		return code + " diff:" + aggregateGroupDifferenceBackup + " depth:" + depth + " label:" + label;
 	}
 
 	@Override
@@ -205,5 +210,9 @@ public class Node {
 	@Override
 	public int hashCode() {
 		return Objects.hash(code);
+	}
+
+	public String getLabel() {
+		return label;
 	}
 }
