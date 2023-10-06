@@ -41,8 +41,8 @@ public class GraphClustering {
 		// output - map of highest code to final code (may be original or enriched)
 
 		if (args.length != 7) {
-			System.out.println("Expecting 7 arguments: path-to-knowledge-graph path-to-knowledge-graph-labels path-to-instance-data path-to-cohorts groupB-indicator " +
-					"min-difference max-clusters");
+			System.out.println("Expecting 8 arguments: path-to-knowledge-graph path-to-knowledge-graph-labels path-to-instance-data path-to-cohorts groupB-indicator " +
+					"depth-boost min-difference max-clusters");
 			System.exit(1);
 		}
 		String knowledgeGraphHierarchy = args[0];
@@ -51,9 +51,9 @@ public class GraphClustering {
 		String instanceCohorts = args[3];
 		String groupBIndicator = args[4];
 
-		float depthMultiplier = 0.3f;
-		float minDiff = Float.parseFloat(args[5]);
-		int maxClusters = Integer.parseInt(args[6]);
+		float depthMultiplier = Float.parseFloat(args[5]);
+		float minDiff = Float.parseFloat(args[6]);
+		int maxClusters = Integer.parseInt(args[7]);
 
 		new GraphClustering(depthMultiplier, minDiff, maxClusters)
 				.run(knowledgeGraphHierarchy, knowledgeGraphLabels, instanceData, instanceCohorts, groupBIndicator);
