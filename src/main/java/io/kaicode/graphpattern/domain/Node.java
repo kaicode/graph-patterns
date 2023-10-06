@@ -18,7 +18,7 @@ public class Node {
 	private final Set<String> groupBInstanceIds;
 	private float aggregateGroupDifference = -2;
 	private float aggregateGroupDifferenceBackup = 0;
-	private int depth;
+	private int depth = 100_000;
 
 	public Node(String code) {
 		this.code = code;
@@ -170,7 +170,7 @@ public class Node {
 	 * @param depth depth so far
 	 */
 	public void recordDepth(int depth) {
-		if (this.depth < depth) {
+		if (this.depth > depth) {
 			this.depth = depth;
 		}
 		for (Node child : getChildren()) {
