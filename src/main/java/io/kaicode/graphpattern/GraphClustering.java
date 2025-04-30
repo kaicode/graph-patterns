@@ -40,9 +40,28 @@ public class GraphClustering {
 		// output - list of highest, strength and type
 		// output - map of highest code to final code (may be original or enriched)
 
-		if (args.length != 7) {
-			System.out.println("Expecting 8 arguments: path-to-knowledge-graph path-to-knowledge-graph-labels path-to-instance-data path-to-cohorts groupB-indicator " +
-					"depth-boost min-difference max-clusters");
+		/*
+Example params:
+knowledge-graph/child-parent.txt
+knowledge-graph/code-labels.txt
+synthetic-data/patients.txt
+synthetic-data/cohorts.txt
+"B"
+0.1
+0.05
+10
+		 */
+
+		if (args.length != 8) {
+			System.out.println("Expecting 8 arguments: " +
+					"path-to-knowledge-graph " +
+					"path-to-knowledge-graph-labels " +
+					"path-to-instance-data " +
+					"path-to-cohorts " +
+					"groupB-indicator " +
+					"depth-boost " +
+					"min-difference " +
+					"max-clusters");
 			System.exit(1);
 		}
 		String knowledgeGraphHierarchy = args[0];
@@ -65,13 +84,17 @@ public class GraphClustering {
 		this.maxClusters = maxClusters;
 	}
 
-	private void run(String knowledgeGraphHierarchy, String knowledgeGraphLabelsPath, String instanceData, String instanceCohorts, String groupBIndicator) {
+	public void run(String knowledgeGraphHierarchyPath, String knowledgeGraphLabelsPath, String instanceDataPath, String instanceCohortsPath, String groupBIndicator) {
 
 		System.out.println("< Graph Pattern Analysis >");
+		System.out.printf("Depth-multiplier: %s, Minimum-difference: %s, Maximum-clusters: %s%n", depthMultiplier, minDiff, maxClusters);
 		System.out.println();
+		System.out.println(">> Loading required data");
 
-		GraphBuilder knowledgeGraph = loadKnowledgeGraph(knowledgeGraphHierarchy);
+		GraphBuilder knowledgeGraph = loadKnowledgeGraph(knowledgeGraphHierarchyPath);
+		System.out.printf(" %,d nodes loaded%n", knowledgeGraph.getNodeCount());
 		Map<String, String> knowledgeGraphLabels = loadKnowledgeGraphLabels(knowledgeGraphLabelsPath);
+		System.out.printf(" %,d labels loaded%n", knowledgeGraphLabels.size());
 		for (Map.Entry<String, String> labelEntry : knowledgeGraphLabels.entrySet()) {
 			String code = labelEntry.getKey();
 			Node node = knowledgeGraph.getNode(code);
@@ -80,8 +103,9 @@ public class GraphClustering {
 			}
 		}
 
-		Map<String, Set<String>> allInstanceGraphs = loadInstanceGraphs(instanceData);
-		Map<String, Set<String>> cohortInstanceMap = loadCohorts(instanceCohorts);
+		Map<String, Set<String>> allInstanceGraphs = loadInstanceGraphs(instanceDataPath);
+		System.out.printf(" %,d patient records loaded%n", allInstanceGraphs.size());
+		Map<String, Set<String>> cohortInstanceMap = loadCohorts(instanceCohortsPath);
 		Set<String> groupBCohort = cohortInstanceMap.get(groupBIndicator);
 		if (groupBCohort == null) {
 			throw new RuntimeException("GroupB indicator is not present in the cohorts file");
@@ -89,9 +113,17 @@ public class GraphClustering {
 		if (groupBCohort.isEmpty()) {
 			throw new RuntimeException("GroupB cohort is empty");
 		}
+		System.out.printf(" %,d patient records in cohort B%n", groupBCohort.size());
 
+		List<Node> nodesRankedByDifference = run(knowledgeGraph, allInstanceGraphs, groupBCohort, Collections.emptySet());
+		Set<String> allCodesUsed = knowledgeGraph.getAllCodesUsed();
+		writeOutputFile(groupBIndicator, knowledgeGraph, knowledgeGraphLabels, nodesRankedByDifference, allCodesUsed);
+	}
+
+	public List<Node> run(GraphBuilder knowledgeGraph, Map<String, Set<String>> allInstanceGraphs, Set<String> groupBCohort, Set<String> codeBanList) {
 		// Split instance groups
 		// Group A is all patients not in Group B
+		System.out.println(">> Preprocessing...");
 		Map<String, Set<String>> groupAInstanceGraphs = allInstanceGraphs.entrySet().stream()
 				.filter(entry -> !groupBCohort.contains(entry.getKey()))
 				.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -102,45 +134,59 @@ public class GraphClustering {
 
 		// Add instance ids into the graph
 		Set<String> notFoundCodes = new HashSet<>();
-		Set<String> allCodesUsed = new HashSet<>();
 		for (Map.Entry<String, Set<String>> instanceIdAndConcepts : groupAInstanceGraphs.entrySet()) {
 			String id = instanceIdAndConcepts.getKey();
 			Set<String> concepts = instanceIdAndConcepts.getValue();
 			for (String code : concepts) {
-				Node node = knowledgeGraph.getNode(code);
-				if (node == null) {
-					if (notFoundCodes.add(code)) {// Report only once per code
-						System.err.printf("Code %s not found in knowledge graph%n", code);
+				if (!codeBanList.contains(code)) {
+					Node node = knowledgeGraph.getNode(code);
+					if (node == null) {
+						if (notFoundCodes.add(code)) {// Report only once per code
+							System.err.printf("Code %s not found in knowledge graph%n", code);
+						}
+					} else {
+						node.addGroupAInstance(id);
 					}
-				} else {
-					node.addGroupAInstance(id);
-					allCodesUsed.add(code);
 				}
-
 			}
 		}
 		for (Map.Entry<String, Set<String>> patientAndConcepts : groupBInstanceGraphs.entrySet()) {
 			String id = patientAndConcepts.getKey();
 			Set<String> concepts = patientAndConcepts.getValue();
 			for (String code : concepts) {
-				Node node = knowledgeGraph.getNode(code);
-				if (node == null) {
-					if (notFoundCodes.add(code)) {// Report only once per code
-						System.err.printf("Code %s not found in knowledge graph%n", code);
+				if (!codeBanList.contains(code)) {
+					Node node = knowledgeGraph.getNode(code);
+					if (node == null) {
+						if (notFoundCodes.add(code)) {// Report only once per code
+							System.err.printf("Code %s not found in knowledge graph%n", code);
+						}
+					} else {
+						node.addGroupBInstance(id);
 					}
-				} else {
-					node.addGroupBInstance(id);
-					allCodesUsed.add(code);
 				}
 			}
 		}
 
 		int groupASize = groupAInstanceGraphs.size();
 		int groupBSize = groupBInstanceGraphs.size();
-		Set<String> codeBanList = new HashSet<>(knowledgeGraph.getRootNode().getChildren().stream().map(Node::getCode).collect(Collectors.toSet()));
-		List<Node> nodesRankedByDifference = getNodesRankedByDifferenceAndGain(knowledgeGraph, allCodesUsed, groupASize, groupBSize, codeBanList);
+		System.out.println("groupASize " + groupASize);
+		System.out.println("groupBSize " + groupBSize);
 
+		if (groupASize == 0) {
+			throw new RuntimeException("GroupA size is zero");
+		}
+		if (groupBSize == 0) {
+			throw new RuntimeException("GroupB size is zero");
+		}
+
+		//		Set<String> codeBanList = new HashSet<>(knowledgeGraph.getRootNode().getChildren().stream().map(Node::getCode).collect(Collectors.toSet()));
 		Node rootNode = knowledgeGraph.getRootNode();
+		rootNode.recordDepth(0);
+		return getNodesRankedByDifferenceAndGain(knowledgeGraph, groupASize, groupBSize, codeBanList);
+	}
+
+	private void writeOutputFile(String groupBIndicator, GraphBuilder knowledgeGraph, Map<String, String> knowledgeGraphLabels,
+			List<Node> nodesRankedByDifference, Set<String> allCodesUsed) {
 
 		Set<String> chosenNodes = new HashSet<>();
 		Map<String, Float> chosenNodeStrengths = new HashMap<>();
@@ -186,7 +232,7 @@ public class GraphClustering {
 					List<Node> descendantsFilteredSorted = descendantAndSelfSet.stream()
 							.filter(n -> allCodesUsed.contains(n.getCode()))
 							.sorted(MAX_DIFF_MAX_DEPTH_COMPARATOR_USING_DIFF_BACKUP)
-							.collect(Collectors.toList());
+							.toList();
 					clustersWriter.write(descendantsFilteredSorted.stream().map(Node::getCode).collect(Collectors.joining(",")));
 					clustersWriter.newLine();
 
@@ -253,6 +299,7 @@ public class GraphClustering {
 	}
 
 	private Map<String, Set<String>> loadCohorts(String instanceCohorts) {
+		System.out.println("Loading cohort data");
 		try {
 			BufferedReader reader = new BufferedReader(new FileReader(instanceCohorts));
 			String header = reader.readLine();
@@ -276,51 +323,18 @@ public class GraphClustering {
 		}
 	}
 
-	private List<Node> getNodesRankedByDifferenceAndGain(GraphBuilder knowledgeGraph, Set<String> allCodesUsed, int groupASize, int groupBSize, Set<String> codeBanList) {
-
-		Node rootNode = knowledgeGraph.getRootNode();
-		rootNode.recordDepth(0);
-
+	private List<Node> getNodesRankedByDifferenceAndGain(GraphBuilder knowledgeGraph, int groupASize, int groupBSize, Set<String> codeBanList) {
+		System.out.println("Ranking nodes, please wait a moment...");
+		Set<String> allCodesUsed = knowledgeGraph.getAllCodesUsed();
 		Set<Node> candidateNodes = calculateNodeDiffAndCollect(allCodesUsed, knowledgeGraph, groupASize, groupBSize, codeBanList, false);
 
 		List<Node> bestNodesWithPositiveScore = new ArrayList<>();
-		Set<Node> candidateNodesForPositive = new HashSet<>(candidateNodes);
-		while (bestNodesWithPositiveScore.size() < maxClusters && !candidateNodesForPositive.isEmpty()) {
-			List<Node> sortedNodes = new ArrayList<>(candidateNodesForPositive);
-			sortedNodes.sort(MAX_DIFF_MAX_DEPTH_COMPARATOR);
-			Node candidateNode = sortedNodes.get(0);
-			if (candidateNode.getDepthBoostedAggregateGroupDifference() < minDiff) {
-				break;
-			}
-			if (!anySubsumption(candidateNode, bestNodesWithPositiveScore)) {
-				bestNodesWithPositiveScore.add(candidateNode);
-				// Clear diff of all descendants
-				calculateNodeDiffAndCollect(candidateNode.getCodeAndDescendantCodes(new HashSet<>()), knowledgeGraph, groupASize, groupBSize, codeBanList, true);
-			}
-			if (candidateNodesForPositive.remove(candidateNode)) {
-				System.out.println("Failed to remove");
-			}
-		}
+		getBestNodes(bestNodesWithPositiveScore, false, candidateNodes, knowledgeGraph, groupASize, groupBSize, codeBanList);
 
 		List<Node> bestNodesWithNegativeScore = new ArrayList<>();
-		Set<Node> candidateNodesForNegative = new HashSet<>(candidateNodes);
-		while (bestNodesWithNegativeScore.size() < maxClusters && !candidateNodesForNegative.isEmpty()) {
-			List<Node> sortedNodes = new ArrayList<>(candidateNodesForNegative);
-			sortedNodes.sort(MAX_DIFF_MAX_DEPTH_COMPARATOR);
-			Collections.reverse(sortedNodes);
-			Node candidateNode = sortedNodes.get(0);
-			if (candidateNode.getDepthBoostedAggregateGroupDifference() * -1 < minDiff) {
-				break;
-			}
-			if (!anySubsumption(candidateNode, bestNodesWithNegativeScore)) {
-				bestNodesWithNegativeScore.add(candidateNode);
-				// Clear diff of all descendants
-				calculateNodeDiffAndCollect(candidateNode.getCodeAndDescendantCodes(new HashSet<>()), knowledgeGraph, groupASize, groupBSize, codeBanList, true);
-			}
-			if (candidateNodesForNegative.remove(candidateNode)) {
-				System.out.println("Failed to remove");
-			}
-		}
+		getBestNodes(bestNodesWithNegativeScore, true, candidateNodes, knowledgeGraph, groupASize, groupBSize, codeBanList);
+
+		System.out.println();
 
 		List<Node> allBestNodes = new ArrayList<>(bestNodesWithPositiveScore);
 		allBestNodes.addAll(bestNodesWithNegativeScore);
@@ -328,7 +342,39 @@ public class GraphClustering {
 		return allBestNodes;
 	}
 
-	private Set<Node> calculateNodeDiffAndCollect(Set<String> allCodesUsed, GraphBuilder knowledgeGraph, int groupASize, int groupBSize, Set<String> codeBanList, boolean forceZero) {
+	private void getBestNodes(List<Node> bestNodes, boolean negativeSearch, Set<Node> candidateNodes, GraphBuilder knowledgeGraph, int groupASize, int groupBSize, Set<String> codeBanList) {
+		Set<Node> candidateNodesCopy = new HashSet<>(candidateNodes);
+		while (bestNodes.size() < maxClusters && !candidateNodesCopy.isEmpty()) {
+			List<Node> sortedNodes = new ArrayList<>(candidateNodesCopy);
+			sortedNodes.sort(MAX_DIFF_MAX_DEPTH_COMPARATOR);
+			if (negativeSearch) {
+				Collections.reverse(sortedNodes);
+			}
+			Node candidateNode = sortedNodes.get(0);
+			if (negativeSearch) {
+				if (candidateNode.getDepthBoostedAggregateGroupDifference() * -1 < minDiff) {
+					break;
+				}
+			} else {
+				if (candidateNode.getDepthBoostedAggregateGroupDifference() < minDiff) {
+					break;
+				}
+			}
+			if (!anySubsumption(candidateNode, bestNodes)) {
+				bestNodes.add(candidateNode);
+				// Clear diff of all descendants
+				System.out.print(".");
+				calculateNodeDiffAndCollect(candidateNode.getCodeAndDescendantCodes(new HashSet<>()), knowledgeGraph, groupASize, groupBSize, codeBanList, true);
+			}
+			if (candidateNodesCopy.remove(candidateNode)) {
+				System.out.println("Failed to remove");
+			}
+		}
+	}
+
+	private Set<Node> calculateNodeDiffAndCollect(Set<String> allCodesUsed, GraphBuilder knowledgeGraph,
+				int groupASize, int groupBSize, Set<String> codeBanList, boolean forceZero) {
+
 		Set<Node> nodes = new HashSet<>();
 		for (String codeUsed : allCodesUsed) {
 			Node node = knowledgeGraph.getNode(codeUsed);
@@ -357,6 +403,7 @@ public class GraphClustering {
 	}
 
 	private GraphBuilder loadKnowledgeGraph(String knowledgeGraphHierarchy) {
+		System.out.println("Loading knowledge graph");
 		GraphBuilder graphBuilder = new GraphBuilder();
 
 		try (BufferedReader reader = new BufferedReader(new FileReader(knowledgeGraphHierarchy))) {
@@ -374,6 +421,7 @@ public class GraphClustering {
 	}
 
 	private Map<String, String> loadKnowledgeGraphLabels(String knowledgeGraphLabelsPath) {
+		System.out.println("Loading graph labels");
 		Map<String, String> labels = new HashMap<>();
 		try (BufferedReader reader = new BufferedReader(new FileReader(knowledgeGraphLabelsPath))) {
 			FileUtils.readAndAssertHeader(reader, "code\tlabel");
@@ -391,6 +439,7 @@ public class GraphClustering {
 	}
 
 	private Map<String, Set<String>> loadInstanceGraphs(String instanceData) {
+		System.out.println("Reading instance data");
 		Map<String, Set<String>> instanceGraphs = new HashMap<>();
 		try (BufferedReader reader = new BufferedReader(new FileReader(instanceData))) {
 			FileUtils.readAndAssertHeader(reader, "instance\tyear\tcode");

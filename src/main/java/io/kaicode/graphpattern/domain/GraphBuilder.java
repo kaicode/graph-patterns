@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class GraphBuilder {
 
@@ -37,6 +38,10 @@ public class GraphBuilder {
 		return rootNode;
 	}
 
+	public int getNodeCount() {
+		return allNodes.size();
+	}
+
 	private void collectAncestors(Node node, Set<String> ancestors, int upwardLevelLimit) {
 		if (upwardLevelLimit > 0) {
 			Set<Node> parents = node.getParents();
@@ -45,5 +50,12 @@ public class GraphBuilder {
 				collectAncestors(parent, ancestors, upwardLevelLimit - 1);
 			}
 		}
+	}
+
+	public Set<String> getAllCodesUsed() {
+		return allNodes.values().stream()
+				.filter(node -> node.getInstanceCount() > 0)
+				.map(Node::getCode)
+				.collect(Collectors.toSet());
 	}
 }
